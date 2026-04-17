@@ -1,0 +1,17 @@
+name: deckhand_flash
+description: Disk enumeration + image flashing via the Go sidecar.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  deckhand_core:
+    path: ../deckhand_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

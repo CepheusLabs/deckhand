@@ -1,0 +1,21 @@
+name: deckhand_ui
+description: Wizard screens and shared Flutter widgets for Deckhand.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  deckhand_core:
+    path: ../deckhand_core
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.0.0
+  slang: ^4.0.0
+  slang_flutter: ^4.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

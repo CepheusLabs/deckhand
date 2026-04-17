@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  # -----------------------------------------------------------------
+  # Build the sidecar binary for every target OS/arch pair we ship.
+  # -----------------------------------------------------------------
+  sidecar:
+    name: Sidecar ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64, runner: windows-latest, ext: ".exe" }
+          - { goos: darwin,  goarch: amd64, runner: macos-latest,   ext: ""     }
+          - { goos: darwin,  goarch: arm64, runner: macos-latest,   ext: ""     }
+          - { goos: linux,   goarch: amd64, runner: ubuntu-latest,  ext: ""     }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-latest,  ext: ""     }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: sidecar/go.sum
+
+      - name: Build
+        working-directory: sidecar
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        shell: bash
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}"
+          go build -trimpath \
+            -ldflags "-s -w -X main.Version=${VERSION}" \
+            -o "dist/deckhand-sidecar-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}" \
+            ./cmd/deckhand-sidecar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: sidecar/dist/*
+
+  # -----------------------------------------------------------------
+  # Flutter desktop builds — one job per target OS. Pulls in the
+  # matching sidecar artifact before packaging.
+  # -----------------------------------------------------------------
+  app:
+    name: App (${{ matrix.os }})
+    needs: sidecar
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, runner: windows-latest, build_cmd: "flutter build windows --release" }
+          - { os: macos,   runner: macos-latest,   build_cmd: "flutter build macos --release"   }
+          - { os: linux,   runner: ubuntu-latest,  build_cmd: "flutter build linux --release"   }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.9"
+          channel: stable
+          cache: true
+
+      - name: Linux deps
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake libgtk-3-dev libsecret-1-dev
+
+      - name: Download sidecar artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sidecar-${{ matrix.os }}-*
+          merge-multiple: true
+          path: app/sidecar-bin
+
+      - name: Pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: Create platform dirs (idempotent)
+        working-directory: app
+        run: flutter create --platforms=windows,macos,linux --project-name=deckhand .
+
+      - name: Build
+        working-directory: app
+        run: ${{ matrix.build_cmd }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deckhand-app-${{ matrix.os }}
+          path: |
+            app/build/windows/x64/runner/Release/**
+            app/build/macos/Build/Products/Release/deckhand.app
+            app/build/linux/x64/release/bundle/**
+
+  # -----------------------------------------------------------------
+  # Publish a GitHub Release with every artifact attached.
+  # -----------------------------------------------------------------
+  release:
+    name: Publish release
+    needs: [sidecar, app]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: false
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*
+          draft: true
+          generate_release_notes: true

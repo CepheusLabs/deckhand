@@ -1,0 +1,20 @@
+name: deckhand_profiles
+description: Fetch and parse Deckhand printer profiles from deckhand-builds.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  deckhand_core:
+    path: ../deckhand_core
+  dio: ^5.9.1
+  yaml: ^3.1.0
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

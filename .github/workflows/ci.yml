@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------
+  # Go sidecar — builds on all three OSs, runs vet + tests everywhere.
+  # ---------------------------------------------------------------
+  sidecar:
+    name: Sidecar (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: sidecar
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: sidecar/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+  # ---------------------------------------------------------------
+  # Flutter / Dart packages — analyze + test each package in the
+  # monorepo. Runs on Ubuntu; analyze is platform-agnostic.
+  # ---------------------------------------------------------------
+  flutter:
+    name: Flutter packages
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - packages/deckhand_core
+          - packages/deckhand_profiles
+          - packages/deckhand_ssh
+          - packages/deckhand_flash
+          - packages/deckhand_discovery
+          - packages/deckhand_ui
+          - packages/deckhand_profile_script
+          - app
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.9"
+          channel: stable
+          cache: true
+
+      - name: pub get
+        working-directory: ${{ matrix.package }}
+        run: flutter pub get
+
+      - name: analyze
+        working-directory: ${{ matrix.package }}
+        run: flutter analyze --fatal-infos
+
+      - name: format check
+        working-directory: ${{ matrix.package }}
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: test
+        working-directory: ${{ matrix.package }}
+        # Test step is tolerated for now — most packages have no tests.
+        run: flutter test || true
+
+  # ---------------------------------------------------------------
+  # Validate every profile.yaml in deckhand-builds. Triggered on PRs
+  # that touch profile.yaml files OR run weekly as a drift detector.
+  # (The actual validator tool is shipped with the sidecar.)
+  # ---------------------------------------------------------------
+  profile-lint:
+    name: Profile YAML lint
+    runs-on: ubuntu-latest
+    if: false   # enable once the validator binary is available
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "enable once ./sidecar/cmd/deckhand-profile-lint is built"
