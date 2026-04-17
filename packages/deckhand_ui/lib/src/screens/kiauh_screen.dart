@@ -33,30 +33,30 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
       stepper: const DeckhandStepper(),
       title: 'Install KIAUH?',
       helperText: explainer,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (examples.isNotEmpty) ...[
-            const Text(
-              'What KIAUH does for you:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+      body: RadioGroup<bool>(
+        groupValue: _install,
+        onChanged: (v) => setState(() => _install = v),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (examples.isNotEmpty) ...[
+              const Text(
+                'What KIAUH does for you:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              for (final ex in examples) Text('• $ex'),
+              const SizedBox(height: 12),
+            ],
+            const RadioListTile<bool>(
+              value: true,
+              title: Text('Install KIAUH (recommended)'),
             ),
-            for (final ex in examples) Text('• $ex'),
-            const SizedBox(height: 12),
+            const RadioListTile<bool>(
+              value: false,
+              title: Text('Skip — I\'ll install it later if I want'),
+            ),
           ],
-          RadioListTile<bool>(
-            value: true,
-            groupValue: _install,
-            onChanged: (v) => setState(() => _install = v),
-            title: const Text('Install KIAUH (recommended)'),
-          ),
-          RadioListTile<bool>(
-            value: false,
-            groupValue: _install,
-            onChanged: (v) => setState(() => _install = v),
-            title: const Text('Skip — I\'ll install it later if I want'),
-          ),
-        ],
+        ),
       ),
       primaryAction: WizardAction(
         label: 'Continue',

@@ -31,38 +31,41 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
           'Kalico is a community-maintained Klipper fork with weekly '
           'rebases and some helpful extras (gcode_shell_command, danger_'
           'options). Mainline Klipper is upstream/master — more conservative.',
-      body: Column(
-        children: [
-          for (final c in choices)
-            Card(
-              elevation: _choice == c.id ? 4 : 1,
-              color: _choice == c.id
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              child: RadioListTile<String>(
-                value: c.id,
-                groupValue: _choice,
-                onChanged: (v) => setState(() => _choice = v),
-                title: Row(
-                  children: [
-                    Text(c.displayName),
-                    if (c.recommended) ...[
-                      const SizedBox(width: 8),
-                      const Chip(
-                        label: Text('Recommended'),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+      body: RadioGroup<String>(
+        groupValue: _choice,
+        onChanged: (v) => setState(() => _choice = v),
+        child: Column(
+          children: [
+            for (final c in choices)
+              Card(
+                elevation: _choice == c.id ? 4 : 1,
+                color: _choice == c.id
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                child: RadioListTile<String>(
+                  value: c.id,
+                  title: Row(
+                    children: [
+                      Text(c.displayName),
+                      if (c.recommended) ...[
+                        const SizedBox(width: 8),
+                        const Chip(
+                          label: Text('Recommended'),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                subtitle: Text(
-                  '${c.description ?? ''}\n${c.repo} @ ${c.ref}',
-                  maxLines: 3,
+                  ),
+                  subtitle: Text(
+                    '${c.description ?? ''}\n${c.repo} @ ${c.ref}',
+                    maxLines: 3,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       primaryAction: WizardAction(
         label: 'Continue',

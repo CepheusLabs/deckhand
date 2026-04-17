@@ -43,38 +43,41 @@ class _FlashTargetScreenState extends ConsumerState<FlashTargetScreen> {
             return Text('Error listing disks: ${snap.error}');
           }
           final disks = snap.data ?? const [];
-          return Column(
-            children: [
-              Row(
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                    onPressed: () => setState(() {
-                      _disksFuture = ref.read(flashServiceProvider).listDisks();
-                    }),
-                  ),
-                ],
-              ),
-              for (final d in disks)
-                Card(
-                  color: _selected == d.id
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : null,
-                  child: RadioListTile<String>(
-                    value: d.id,
-                    groupValue: _selected,
-                    onChanged: d.removable
-                        ? (v) => setState(() => _selected = v)
+          return RadioGroup<String>(
+            groupValue: _selected,
+            onChanged: (v) => setState(() => _selected = v),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                      onPressed: () => setState(() {
+                        _disksFuture = ref
+                            .read(flashServiceProvider)
+                            .listDisks();
+                      }),
+                    ),
+                  ],
+                ),
+                for (final d in disks)
+                  Card(
+                    color: _selected == d.id
+                        ? Theme.of(context).colorScheme.primaryContainer
                         : null,
-                    title: Text(d.model.isEmpty ? d.id : d.model),
-                    subtitle: Text(
-                      '${_formatBytes(d.sizeBytes)} · ${d.bus}'
-                      '${d.removable ? "" : " · (non-removable — dimmed)"}',
+                    child: RadioListTile<String>(
+                      value: d.id,
+                      enabled: d.removable,
+                      title: Text(d.model.isEmpty ? d.id : d.model),
+                      subtitle: Text(
+                        '${_formatBytes(d.sizeBytes)} · ${d.bus}'
+                        '${d.removable ? "" : " · (non-removable — dimmed)"}',
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           );
         },
       ),

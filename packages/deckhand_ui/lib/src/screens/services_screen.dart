@@ -64,28 +64,30 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       stepper: const DeckhandStepper(),
       title: svc.displayName,
       helperText: wiz['helper_text'] as String?,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${_index + 1} of ${queue.length}',
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: 12),
-          if (wiz['question'] != null)
+      body: RadioGroup<String>(
+        groupValue: _action,
+        onChanged: (v) => setState(() => _action = v),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              wiz['question'] as String,
-              style: Theme.of(context).textTheme.titleLarge,
+              '${_index + 1} of ${queue.length}',
+              style: Theme.of(context).textTheme.labelMedium,
             ),
-          const SizedBox(height: 16),
-          for (final opt in options)
-            RadioListTile<String>(
-              value: opt['id'] as String,
-              groupValue: _action,
-              onChanged: (v) => setState(() => _action = v),
-              title: Text(opt['label'] as String? ?? opt['id'] as String),
-            ),
-        ],
+            const SizedBox(height: 12),
+            if (wiz['question'] != null)
+              Text(
+                wiz['question'] as String,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            const SizedBox(height: 16),
+            for (final opt in options)
+              RadioListTile<String>(
+                value: opt['id'] as String,
+                title: Text(opt['label'] as String? ?? opt['id'] as String),
+              ),
+          ],
+        ),
       ),
       primaryAction: WizardAction(
         label: _index + 1 < queue.length ? 'Next service' : 'Continue',

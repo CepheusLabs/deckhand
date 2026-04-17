@@ -31,24 +31,26 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
           'The screen daemon drives your printer\'s touchscreen. Some options '
           'may require restoring closed-source binaries from a backup — those '
           'cards will say so.',
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final s in screens)
-            Card(
-              elevation: _choice == s.id ? 4 : 1,
-              color: _choice == s.id
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              child: RadioListTile<String>(
-                value: s.id,
-                groupValue: _choice,
-                onChanged: (v) => setState(() => _choice = v),
-                title: Text(s.displayName ?? s.id),
-                subtitle: Text(_subtitle(s)),
+      body: RadioGroup<String>(
+        groupValue: _choice,
+        onChanged: (v) => setState(() => _choice = v),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final s in screens)
+              Card(
+                elevation: _choice == s.id ? 4 : 1,
+                color: _choice == s.id
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                child: RadioListTile<String>(
+                  value: s.id,
+                  title: Text(s.displayName ?? s.id),
+                  subtitle: Text(_subtitle(s)),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       primaryAction: WizardAction(
         label: 'Continue',

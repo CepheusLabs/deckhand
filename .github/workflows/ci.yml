@@ -45,8 +45,8 @@ jobs:
         run: go test -count=1 ./...
 
   # ---------------------------------------------------------------
-  # Flutter / Dart packages — analyze + test each package in the
-  # monorepo. Runs on Ubuntu; analyze is platform-agnostic.
+  # Flutter / Dart packages — analyze + test + format each package in
+  # the monorepo. Runs on Ubuntu; analyze is platform-agnostic.
   # ---------------------------------------------------------------
   flutter:
     name: Flutter packages
@@ -85,36 +85,16 @@ jobs:
 
       - name: analyze
         working-directory: ${{ matrix.package }}
-        # --fatal-warnings (not --fatal-infos) — deprecation warnings from
-        # RadioListTile / RadioGroup in newer Flutter versions are info-
-        # level and still compile + run. We'll promote to --fatal-infos
-        # once the RadioGroup migration lands across all screens.
-        run: flutter analyze --fatal-warnings
+        run: flutter analyze --fatal-infos
+
+      - name: format check
+        working-directory: ${{ matrix.package }}
+        run: dart format --output=none --set-exit-if-changed .
 
       - name: test
         working-directory: ${{ matrix.package }}
         # Test step is tolerated for now — most packages have no tests yet.
         run: flutter test || true
-
-  # ---------------------------------------------------------------
-  # Canonical Dart formatting. Soft-fail during early development so
-  # contributors can land work without worrying about trailing commas.
-  # Flip to hard-fail before v1.0 ships.
-  # ---------------------------------------------------------------
-  format:
-    name: Dart format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.38.9"
-          channel: stable
-          cache: true
-      - name: dart format (report only)
-        run: |
-          dart format --output=none --set-exit-if-changed . || \
-            echo "::warning::dart format would rewrite files. Run 'dart format .' locally to normalize."
 
   # ---------------------------------------------------------------
   # Validate every profile.yaml in deckhand-builds. Enabled once the

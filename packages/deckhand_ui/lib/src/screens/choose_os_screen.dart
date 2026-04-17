@@ -32,39 +32,41 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
           'Pick the base Linux image to flash onto your printer\'s eMMC. '
           'Deckhand downloads the image, verifies it, and writes it to the '
           'disk you chose.',
-      body: Column(
-        children: [
-          for (final opt in options)
-            Card(
-              color: _choice == opt.id
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              child: RadioListTile<String>(
-                value: opt.id,
-                groupValue: _choice,
-                onChanged: (v) => setState(() => _choice = v),
-                title: Row(
-                  children: [
-                    Text(opt.displayName),
-                    if (opt.recommended) ...[
-                      const SizedBox(width: 8),
-                      const Chip(
-                        label: Text('Recommended'),
-                        visualDensity: VisualDensity.compact,
-                      ),
+      body: RadioGroup<String>(
+        groupValue: _choice,
+        onChanged: (v) => setState(() => _choice = v),
+        child: Column(
+          children: [
+            for (final opt in options)
+              Card(
+                color: _choice == opt.id
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                child: RadioListTile<String>(
+                  value: opt.id,
+                  title: Row(
+                    children: [
+                      Text(opt.displayName),
+                      if (opt.recommended) ...[
+                        const SizedBox(width: 8),
+                        const Chip(
+                          label: Text('Recommended'),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                subtitle: Text(
-                  [
-                    opt.notes?.trim() ?? '',
-                    if (opt.sizeBytesApprox != null)
-                      '~${(opt.sizeBytesApprox! / (1 << 30)).toStringAsFixed(1)} GB download',
-                  ].where((s) => s.isNotEmpty).join('\n'),
+                  ),
+                  subtitle: Text(
+                    [
+                      opt.notes?.trim() ?? '',
+                      if (opt.sizeBytesApprox != null)
+                        '~${(opt.sizeBytesApprox! / (1 << 30)).toStringAsFixed(1)} GB download',
+                    ].where((s) => s.isNotEmpty).join('\n'),
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       primaryAction: WizardAction(
         label: 'Continue',
