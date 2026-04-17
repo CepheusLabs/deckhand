@@ -55,6 +55,9 @@ class VerifyScreen extends ConsumerWidget {
   }
 
   String _pathFor(Map<String, dynamic> raw) {
-    return raw['path'] as String? ?? raw['name'] as String? ?? raw['unit'] as String? ?? '?';
+    return raw['path'] as String? ??
+        raw['name'] as String? ??
+        raw['unit'] as String? ??
+        '?';
   }
 }

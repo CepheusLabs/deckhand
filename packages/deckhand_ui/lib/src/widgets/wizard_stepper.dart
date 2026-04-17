@@ -67,7 +67,11 @@ class WizardStepperItem {
 enum _StepState { done, current, future }
 
 class _StepDot extends StatelessWidget {
-  const _StepDot({required this.label, required this.state, required this.onTap});
+  const _StepDot({
+    required this.label,
+    required this.state,
+    required this.onTap,
+  });
   final String label;
   final _StepState state;
   final VoidCallback? onTap;
@@ -82,7 +86,9 @@ class _StepDot extends StatelessWidget {
     };
     final textStyle = theme.textTheme.labelMedium?.copyWith(
       color: color,
-      fontWeight: state == _StepState.current ? FontWeight.w700 : FontWeight.w500,
+      fontWeight: state == _StepState.current
+          ? FontWeight.w700
+          : FontWeight.w500,
     );
     return InkWell(
       onTap: onTap,

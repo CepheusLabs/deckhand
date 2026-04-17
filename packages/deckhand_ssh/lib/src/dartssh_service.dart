@@ -48,7 +48,12 @@ class DartsshService implements SshService {
 
     final id = _uuid.v4();
     _sessions[id] = client;
-    return SshSession(id: id, host: host, port: port, user: _userOf(credential));
+    return SshSession(
+      id: id,
+      host: host,
+      port: port,
+      user: _userOf(credential),
+    );
   }
 
   @override
@@ -91,10 +96,13 @@ class DartsshService implements SshService {
     final stdoutSub = ssh.stdout.listen(stdoutBytes.addAll);
     final stderrSub = ssh.stderr.listen(stderrBytes.addAll);
 
-    await ssh.done.timeout(timeout, onTimeout: () {
-      ssh.close();
-      throw TimeoutException('ssh.run($command) timed out after $timeout');
-    });
+    await ssh.done.timeout(
+      timeout,
+      onTimeout: () {
+        ssh.close();
+        throw TimeoutException('ssh.run($command) timed out after $timeout');
+      },
+    );
 
     await stdoutSub.cancel();
     await stderrSub.cancel();
@@ -129,7 +137,13 @@ class DartsshService implements SshService {
     final sftp = await client.sftp();
     final file = File(localPath);
     final bytes = await file.readAsBytes();
-    final handle = await sftp.open(remotePath, mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write);
+    final handle = await sftp.open(
+      remotePath,
+      mode:
+          SftpFileOpenMode.create |
+          SftpFileOpenMode.truncate |
+          SftpFileOpenMode.write,
+    );
     try {
       await handle.writeBytes(bytes);
       // Leaving chmod as a follow-up; dartssh2's SftpFileMode API varies
@@ -175,9 +189,9 @@ class DartsshService implements SshService {
   }
 
   String _userOf(SshCredential c) => switch (c) {
-        PasswordCredential(:final user) => user,
-        KeyCredential(:final user) => user,
-      };
+    PasswordCredential(:final user) => user,
+    KeyCredential(:final user) => user,
+  };
 
   String _shellQuote(String s) {
     final escaped = s.replaceAll("'", r"'\''");

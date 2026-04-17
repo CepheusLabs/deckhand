@@ -19,7 +19,8 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final files = ref.watch(wizardControllerProvider).profile?.stockOs.files ?? const [];
+    final files =
+        ref.watch(wizardControllerProvider).profile?.stockOs.files ?? const [];
     if (!_seeded) {
       for (final f in files) {
         if (f.defaultAction == 'delete') _deleteSelected.add(f.id);
@@ -75,7 +76,9 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         label: 'Continue',
         onPressed: () async {
           for (final f in files) {
-            await ref.read(wizardControllerProvider).setDecision(
+            await ref
+                .read(wizardControllerProvider)
+                .setDecision(
                   'file.${f.id}',
                   _deleteSelected.contains(f.id) ? 'delete' : 'keep',
                 );

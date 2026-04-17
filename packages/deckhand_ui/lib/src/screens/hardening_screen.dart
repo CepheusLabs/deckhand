@@ -86,7 +86,9 @@ class _HardeningScreenState extends ConsumerState<HardeningScreen> {
           }
           if (_enabled['change_password'] == true) {
             await controller.setDecision(
-                'hardening.new_password', _passwordController.text);
+              'hardening.new_password',
+              _passwordController.text,
+            );
           }
           if (context.mounted) context.go('/review');
         },
@@ -98,9 +100,9 @@ class _HardeningScreenState extends ConsumerState<HardeningScreen> {
   }
 
   Widget _toggle(String key, String title, String subtitle) => SwitchListTile(
-        value: _enabled[key]!,
-        onChanged: (v) => setState(() => _enabled[key] = v),
-        title: Text(title),
-        subtitle: Text(subtitle),
-      );
+    value: _enabled[key]!,
+    onChanged: (v) => setState(() => _enabled[key] = v),
+    title: Text(title),
+    subtitle: Text(subtitle),
+  );
 }

@@ -21,8 +21,8 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
     final profile = ref.watch(wizardControllerProvider).profile;
     final webui = profile?.stack.webui ?? const {};
     final choices = ((webui['choices'] as List?) ?? const []).cast<Map>();
-    final defaultChoices =
-        ((webui['default_choices'] as List?) ?? const []).cast<String>();
+    final defaultChoices = ((webui['default_choices'] as List?) ?? const [])
+        .cast<String>();
     if (_selected.isEmpty) _selected.addAll(defaultChoices);
 
     return WizardScaffold(
@@ -46,7 +46,9 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
                   _selected.remove(id);
                 }
               }),
-              title: Text(raw['display_name'] as String? ?? raw['id'] as String),
+              title: Text(
+                raw['display_name'] as String? ?? raw['id'] as String,
+              ),
               subtitle: Text(
                 '${raw['release_repo']} — port ${raw['default_port']}',
               ),

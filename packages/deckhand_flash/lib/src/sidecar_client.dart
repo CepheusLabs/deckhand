@@ -47,9 +47,13 @@ class SidecarClient {
     _stdoutSub = _process!.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(_handleLine, onError: (e, st) {
-      _failAll(e.toString());
-    }, onDone: _onProcessDone);
+        .listen(
+          _handleLine,
+          onError: (e, st) {
+            _failAll(e.toString());
+          },
+          onDone: _onProcessDone,
+        );
 
     // stderr → consume so the pipe doesn't fill; one-shot listener that
     // forwards to the current process for debugging.
@@ -57,21 +61,27 @@ class SidecarClient {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      // ignore: avoid_print
-      print('[sidecar] $line');
-    });
+          // ignore: avoid_print
+          print('[sidecar] $line');
+        });
 
     // Smoke test that the process responded. Timeout after 5s.
-    await call('ping', const {}).timeout(const Duration(seconds: 5),
-        onTimeout: () {
-      throw SidecarError(
-          code: -1, message: 'Sidecar did not respond to ping within 5s');
-    });
+    await call('ping', const {}).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        throw SidecarError(
+          code: -1,
+          message: 'Sidecar did not respond to ping within 5s',
+        );
+      },
+    );
   }
 
   /// Make a JSON-RPC call and await the response.
   Future<Map<String, dynamic>> call(
-      String method, Map<String, dynamic> params) async {
+    String method,
+    Map<String, dynamic> params,
+  ) async {
     if (!_started) {
       throw StateError('SidecarClient not started');
     }
@@ -105,7 +115,9 @@ class SidecarClient {
   /// Returns a stream that emits notifications then completes with a
   /// single [SidecarResult] event (or errors with [SidecarError]).
   Stream<SidecarEvent> callStreaming(
-      String method, Map<String, dynamic> params) {
+    String method,
+    Map<String, dynamic> params,
+  ) {
     final id = _uuid.v4();
     final controller = StreamController<SidecarEvent>();
     final opSub = _operationSubscribers.putIfAbsent(
@@ -125,17 +137,19 @@ class SidecarClient {
     _process!.stdin.writeln(msg);
     _process!.stdin.flush();
 
-    completer.future.then((res) {
-      controller.add(SidecarResult(res));
-      controller.close();
-      opSub.close();
-      _operationSubscribers.remove(id);
-    }).catchError((e, st) {
-      controller.addError(e, st);
-      controller.close();
-      opSub.close();
-      _operationSubscribers.remove(id);
-    });
+    completer.future
+        .then((res) {
+          controller.add(SidecarResult(res));
+          controller.close();
+          opSub.close();
+          _operationSubscribers.remove(id);
+        })
+        .catchError((e, st) {
+          controller.addError(e, st);
+          controller.close();
+          opSub.close();
+          _operationSubscribers.remove(id);
+        });
     return controller.stream;
   }
 
@@ -171,7 +185,8 @@ class SidecarClient {
 
     // Notification (no id)
     if (!obj.containsKey('id')) {
-      final params = (obj['params'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final params =
+          (obj['params'] as Map?)?.cast<String, dynamic>() ?? const {};
       final opId = params['operation_id'] as String?;
       final note = SidecarNotification(
         method: obj['method'] as String? ?? '',
@@ -192,15 +207,18 @@ class SidecarClient {
 
     if (obj.containsKey('error')) {
       final err = (obj['error'] as Map).cast<String, dynamic>();
-      completer.completeError(SidecarError(
-        code: (err['code'] as num).toInt(),
-        message: err['message'] as String? ?? '',
-        data: err['data'],
-      ));
+      completer.completeError(
+        SidecarError(
+          code: (err['code'] as num).toInt(),
+          message: err['message'] as String? ?? '',
+          data: err['data'],
+        ),
+      );
     } else {
       final result = obj['result'];
       completer.complete(
-          result is Map<String, dynamic> ? result : {'value': result});
+        result is Map<String, dynamic> ? result : {'value': result},
+      );
     }
   }
 

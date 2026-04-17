@@ -61,7 +61,10 @@ class BonsoirDiscoveryService implements DiscoveryService {
         final sock = await Socket.connect(ip, port, timeout: timeout);
         sock.destroy();
         return DiscoveredPrinter(
-          host: ip, hostname: ip, port: port, service: 'moonraker?',
+          host: ip,
+          hostname: ip,
+          port: port,
+          service: 'moonraker?',
         );
       } catch (_) {
         return null;
@@ -80,8 +83,11 @@ class BonsoirDiscoveryService implements DiscoveryService {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       try {
-        final sock = await Socket.connect(host, port,
-            timeout: const Duration(seconds: 3));
+        final sock = await Socket.connect(
+          host,
+          port,
+          timeout: const Duration(seconds: 3),
+        );
         sock.destroy();
         return true;
       } catch (_) {

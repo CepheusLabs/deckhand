@@ -55,7 +55,11 @@ class WelcomeScreen extends ConsumerWidget {
 }
 
 class _HelpCard extends StatelessWidget {
-  const _HelpCard({required this.icon, required this.title, required this.body});
+  const _HelpCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
   final IconData icon;
   final String title;
   final String body;

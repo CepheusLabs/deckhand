@@ -64,7 +64,9 @@ class _FlashTargetScreenState extends ConsumerState<FlashTargetScreen> {
                   child: RadioListTile<String>(
                     value: d.id,
                     groupValue: _selected,
-                    onChanged: d.removable ? (v) => setState(() => _selected = v) : null,
+                    onChanged: d.removable
+                        ? (v) => setState(() => _selected = v)
+                        : null,
                     title: Text(d.model.isEmpty ? d.id : d.model),
                     subtitle: Text(
                       '${_formatBytes(d.sizeBytes)} · ${d.bus}'
@@ -88,7 +90,10 @@ class _FlashTargetScreenState extends ConsumerState<FlashTargetScreen> {
               },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/choose-path')),
+        WizardAction(
+          label: 'Back',
+          onPressed: () => context.go('/choose-path'),
+        ),
       ],
     );
   }

@@ -10,7 +10,8 @@ class FirstBootSetupScreen extends ConsumerStatefulWidget {
   const FirstBootSetupScreen({super.key});
 
   @override
-  ConsumerState<FirstBootSetupScreen> createState() => _FirstBootSetupScreenState();
+  ConsumerState<FirstBootSetupScreen> createState() =>
+      _FirstBootSetupScreenState();
 }
 
 class _FirstBootSetupScreenState extends ConsumerState<FirstBootSetupScreen> {
@@ -30,13 +31,27 @@ class _FirstBootSetupScreenState extends ConsumerState<FirstBootSetupScreen> {
           'stays simple.',
       body: Column(
         children: [
-          TextField(controller: _user, decoration: const InputDecoration(labelText: 'User')),
+          TextField(
+            controller: _user,
+            decoration: const InputDecoration(labelText: 'User'),
+          ),
           const SizedBox(height: 8),
-          TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+          TextField(
+            controller: _password,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+          ),
           const SizedBox(height: 8),
-          TextField(controller: _confirm, obscureText: true, decoration: const InputDecoration(labelText: 'Confirm password')),
+          TextField(
+            controller: _confirm,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Confirm password'),
+          ),
           const SizedBox(height: 8),
-          TextField(controller: _hostname, decoration: const InputDecoration(labelText: 'Hostname (optional)')),
+          TextField(
+            controller: _hostname,
+            decoration: const InputDecoration(labelText: 'Hostname (optional)'),
+          ),
         ],
       ),
       primaryAction: WizardAction(

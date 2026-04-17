@@ -20,11 +20,13 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(wizardControllerProvider).profile;
     final kiauh = profile?.stack.kiauh ?? const <String, dynamic>{};
-    final explainer = ((kiauh['wizard'] as Map?)?['explainer'] as String?) ??
+    final explainer =
+        ((kiauh['wizard'] as Map?)?['explainer'] as String?) ??
         'KIAUH is the Klipper Installation And Update Helper — an interactive '
             'SSH menu for maintaining your stack after Deckhand finishes.';
     final examples =
-        ((kiauh['wizard'] as Map?)?['examples'] as List?)?.cast<String>() ?? const [];
+        ((kiauh['wizard'] as Map?)?['examples'] as List?)?.cast<String>() ??
+        const [];
     _install ??= kiauh['default_install'] as bool? ?? true;
 
     return WizardScaffold(
@@ -35,8 +37,10 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (examples.isNotEmpty) ...[
-            const Text('What KIAUH does for you:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'What KIAUH does for you:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             for (final ex in examples) Text('• $ex'),
             const SizedBox(height: 12),
           ],

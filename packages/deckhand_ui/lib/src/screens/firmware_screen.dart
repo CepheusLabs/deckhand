@@ -20,7 +20,8 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(wizardControllerProvider).profile;
     final choices = profile?.firmware.choices ?? const [];
-    _choice ??= profile?.firmware.defaultChoice ??
+    _choice ??=
+        profile?.firmware.defaultChoice ??
         (choices.isNotEmpty ? choices.first.id : null);
 
     return WizardScaffold(
@@ -68,12 +69,17 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
         onPressed: _choice == null
             ? null
             : () async {
-                await ref.read(wizardControllerProvider).setDecision('firmware', _choice!);
+                await ref
+                    .read(wizardControllerProvider)
+                    .setDecision('firmware', _choice!);
                 if (context.mounted) context.go('/webui');
               },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/choose-path')),
+        WizardAction(
+          label: 'Back',
+          onPressed: () => context.go('/choose-path'),
+        ),
       ],
     );
   }

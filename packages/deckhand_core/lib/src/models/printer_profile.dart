@@ -70,10 +70,14 @@ class PrinterProfile {
       stockOs: StockOsInventory.fromJson(_mapOr(json['stock_os'])),
       wizard: WizardConfig.fromJson(_mapOr(json['wizard'])),
       flows: FlowConfig.fromJson(_mapOr(json['flows'])),
-      verifiers: _listOfMap(json['verifiers']).map(VerifierConfig.fromJson).toList(),
-      requiredHosts: ((json['required_hosts'] as List?) ?? const []).cast<String>(),
-      maintainers:
-          _listOfMap(json['maintainers']).map(MaintainerSpec.fromJson).toList(),
+      verifiers: _listOfMap(
+        json['verifiers'],
+      ).map(VerifierConfig.fromJson).toList(),
+      requiredHosts: ((json['required_hosts'] as List?) ?? const [])
+          .cast<String>(),
+      maintainers: _listOfMap(
+        json['maintainers'],
+      ).map(MaintainerSpec.fromJson).toList(),
     );
   }
 }
@@ -82,21 +86,23 @@ enum ProfileStatus { stub, alpha, beta, stable, deprecated }
 
 extension ProfileStatusX on ProfileStatus {
   static ProfileStatus parse(String s) => switch (s) {
-        'stub' => ProfileStatus.stub,
-        'alpha' => ProfileStatus.alpha,
-        'beta' => ProfileStatus.beta,
-        'stable' => ProfileStatus.stable,
-        'deprecated' => ProfileStatus.deprecated,
-        _ => ProfileStatus.alpha,
-      };
+    'stub' => ProfileStatus.stub,
+    'alpha' => ProfileStatus.alpha,
+    'beta' => ProfileStatus.beta,
+    'stable' => ProfileStatus.stable,
+    'deprecated' => ProfileStatus.deprecated,
+    _ => ProfileStatus.alpha,
+  };
 }
 
 class MaintainerSpec {
   const MaintainerSpec({required this.name, this.contact});
   final String name;
   final String? contact;
-  factory MaintainerSpec.fromJson(Map<String, dynamic> j) =>
-      MaintainerSpec(name: j['name'] as String? ?? '', contact: j['contact'] as String?);
+  factory MaintainerSpec.fromJson(Map<String, dynamic> j) => MaintainerSpec(
+    name: j['name'] as String? ?? '',
+    contact: j['contact'] as String?,
+  );
 }
 
 class HardwareSpec {
@@ -118,16 +124,16 @@ class HardwareSpec {
   final List<String> features;
 
   factory HardwareSpec.fromJson(Map<String, dynamic> j) => HardwareSpec(
-        architecture: j['architecture'] as String?,
-        sbc: j['sbc'] is Map ? SbcSpec.fromJson((j['sbc'] as Map).cast()) : null,
-        kinematics: j['kinematics'] as String?,
-        buildVolumeMm: j['build_volume_mm'] is Map
-            ? BuildVolume.fromJson((j['build_volume_mm'] as Map).cast())
-            : null,
-        steppers: _listOfMap(j['steppers']),
-        sensors: _listOfMap(j['sensors']),
-        features: ((j['features'] as List?) ?? const []).cast<String>(),
-      );
+    architecture: j['architecture'] as String?,
+    sbc: j['sbc'] is Map ? SbcSpec.fromJson((j['sbc'] as Map).cast()) : null,
+    kinematics: j['kinematics'] as String?,
+    buildVolumeMm: j['build_volume_mm'] is Map
+        ? BuildVolume.fromJson((j['build_volume_mm'] as Map).cast())
+        : null,
+    steppers: _listOfMap(j['steppers']),
+    sensors: _listOfMap(j['sensors']),
+    features: ((j['features'] as List?) ?? const []).cast<String>(),
+  );
 }
 
 class SbcSpec {
@@ -136,10 +142,10 @@ class SbcSpec {
   final String? board;
   final int? emmcSizeBytes;
   factory SbcSpec.fromJson(Map<String, dynamic> j) => SbcSpec(
-        soc: j['soc'] as String?,
-        board: j['board'] as String?,
-        emmcSizeBytes: (j['emmc_size_bytes'] as num?)?.toInt(),
-      );
+    soc: j['soc'] as String?,
+    board: j['board'] as String?,
+    emmcSizeBytes: (j['emmc_size_bytes'] as num?)?.toInt(),
+  );
 }
 
 class BuildVolume {
@@ -147,41 +153,54 @@ class BuildVolume {
   final int x;
   final int y;
   final int z;
-  factory BuildVolume.fromJson(Map<String, dynamic> j) =>
-      BuildVolume(x: (j['x'] as num).toInt(), y: (j['y'] as num).toInt(), z: (j['z'] as num).toInt());
+  factory BuildVolume.fromJson(Map<String, dynamic> j) => BuildVolume(
+    x: (j['x'] as num).toInt(),
+    y: (j['y'] as num).toInt(),
+    z: (j['z'] as num).toInt(),
+  );
 }
 
 class OsSpec {
-  const OsSpec({this.stock, this.freshInstallOptions = const [], this.bootMode});
+  const OsSpec({
+    this.stock,
+    this.freshInstallOptions = const [],
+    this.bootMode,
+  });
   final OsStockSpec? stock;
   final List<OsImageOption> freshInstallOptions;
   final String? bootMode;
 
   factory OsSpec.fromJson(Map<String, dynamic> j) => OsSpec(
-        stock: j['stock'] is Map
-            ? OsStockSpec.fromJson((j['stock'] as Map).cast())
-            : null,
-        freshInstallOptions: _listOfMap(j['fresh_install_options'])
-            .map(OsImageOption.fromJson)
-            .toList(),
-        bootMode: j['boot_mode'] as String?,
-      );
+    stock: j['stock'] is Map
+        ? OsStockSpec.fromJson((j['stock'] as Map).cast())
+        : null,
+    freshInstallOptions: _listOfMap(
+      j['fresh_install_options'],
+    ).map(OsImageOption.fromJson).toList(),
+    bootMode: j['boot_mode'] as String?,
+  );
 }
 
 class OsStockSpec {
-  const OsStockSpec({this.distro, this.version, this.codename, this.python, this.notes});
+  const OsStockSpec({
+    this.distro,
+    this.version,
+    this.codename,
+    this.python,
+    this.notes,
+  });
   final String? distro;
   final String? version;
   final String? codename;
   final String? python;
   final String? notes;
   factory OsStockSpec.fromJson(Map<String, dynamic> j) => OsStockSpec(
-        distro: j['distro'] as String?,
-        version: j['version'] as String?,
-        codename: j['codename'] as String?,
-        python: j['python'] as String?,
-        notes: j['notes'] as String?,
-      );
+    distro: j['distro'] as String?,
+    version: j['version'] as String?,
+    codename: j['codename'] as String?,
+    python: j['python'] as String?,
+    notes: j['notes'] as String?,
+  );
 }
 
 class OsImageOption {
@@ -204,29 +223,33 @@ class OsImageOption {
   final String? architecture;
   final String? notes;
   factory OsImageOption.fromJson(Map<String, dynamic> j) => OsImageOption(
-        id: j['id'] as String,
-        displayName: j['display_name'] as String? ?? j['id'] as String,
-        url: j['url'] as String? ?? '',
-        sha256: j['sha256'] as String?,
-        sizeBytesApprox: (j['size_bytes_approx'] as num?)?.toInt(),
-        recommended: j['recommended'] as bool? ?? false,
-        architecture: j['architecture'] as String?,
-        notes: j['notes'] as String?,
-      );
+    id: j['id'] as String,
+    displayName: j['display_name'] as String? ?? j['id'] as String,
+    url: j['url'] as String? ?? '',
+    sha256: j['sha256'] as String?,
+    sizeBytesApprox: (j['size_bytes_approx'] as num?)?.toInt(),
+    recommended: j['recommended'] as bool? ?? false,
+    architecture: j['architecture'] as String?,
+    notes: j['notes'] as String?,
+  );
 }
 
 class SshConfig {
-  const SshConfig({this.defaultPort = 22, this.defaultCredentials = const [], this.recommendedUserAfterInstall});
+  const SshConfig({
+    this.defaultPort = 22,
+    this.defaultCredentials = const [],
+    this.recommendedUserAfterInstall,
+  });
   final int defaultPort;
   final List<SshDefaultCredential> defaultCredentials;
   final String? recommendedUserAfterInstall;
   factory SshConfig.fromJson(Map<String, dynamic> j) => SshConfig(
-        defaultPort: (j['default_port'] as num?)?.toInt() ?? 22,
-        defaultCredentials: _listOfMap(j['default_credentials'])
-            .map(SshDefaultCredential.fromJson)
-            .toList(),
-        recommendedUserAfterInstall: j['recommended_user_after_install'] as String?,
-      );
+    defaultPort: (j['default_port'] as num?)?.toInt() ?? 22,
+    defaultCredentials: _listOfMap(
+      j['default_credentials'],
+    ).map(SshDefaultCredential.fromJson).toList(),
+    recommendedUserAfterInstall: j['recommended_user_after_install'] as String?,
+  );
 }
 
 class SshDefaultCredential {
@@ -235,7 +258,11 @@ class SshDefaultCredential {
   final String? password;
   final String? keyPath;
   factory SshDefaultCredential.fromJson(Map<String, dynamic> j) =>
-      SshDefaultCredential(user: j['user'] as String, password: j['password'] as String?, keyPath: j['key_path'] as String?);
+      SshDefaultCredential(
+        user: j['user'] as String,
+        password: j['password'] as String?,
+        keyPath: j['key_path'] as String?,
+      );
 }
 
 class FirmwareConfig {
@@ -250,11 +277,11 @@ class FirmwareConfig {
   final bool replaceStockInPlace;
   final bool snapshotBeforeReplace;
   factory FirmwareConfig.fromJson(Map<String, dynamic> j) => FirmwareConfig(
-        choices: _listOfMap(j['choices']).map(FirmwareChoice.fromJson).toList(),
-        defaultChoice: j['default_choice'] as String?,
-        replaceStockInPlace: j['replace_stock_in_place'] as bool? ?? true,
-        snapshotBeforeReplace: j['snapshot_before_replace'] as bool? ?? true,
-      );
+    choices: _listOfMap(j['choices']).map(FirmwareChoice.fromJson).toList(),
+    defaultChoice: j['default_choice'] as String?,
+    replaceStockInPlace: j['replace_stock_in_place'] as bool? ?? true,
+    snapshotBeforeReplace: j['snapshot_before_replace'] as bool? ?? true,
+  );
 }
 
 class FirmwareChoice {
@@ -279,16 +306,16 @@ class FirmwareChoice {
   final String? pythonMin;
   final bool recommended;
   factory FirmwareChoice.fromJson(Map<String, dynamic> j) => FirmwareChoice(
-        id: j['id'] as String,
-        displayName: j['display_name'] as String? ?? j['id'] as String,
-        repo: j['repo'] as String? ?? '',
-        ref: j['ref'] as String? ?? 'main',
-        description: j['description'] as String?,
-        installPath: j['install_path'] as String?,
-        venvPath: j['venv_path'] as String?,
-        pythonMin: j['python_min'] as String?,
-        recommended: j['recommended'] as bool? ?? false,
-      );
+    id: j['id'] as String,
+    displayName: j['display_name'] as String? ?? j['id'] as String,
+    repo: j['repo'] as String? ?? '',
+    ref: j['ref'] as String? ?? 'main',
+    description: j['description'] as String?,
+    installPath: j['install_path'] as String?,
+    venvPath: j['venv_path'] as String?,
+    pythonMin: j['python_min'] as String?,
+    recommended: j['recommended'] as bool? ?? false,
+  );
 }
 
 class StackConfig {
@@ -298,11 +325,11 @@ class StackConfig {
   final Map<String, dynamic>? kiauh;
   final Map<String, dynamic>? crowsnest;
   factory StackConfig.fromJson(Map<String, dynamic> j) => StackConfig(
-        moonraker: _mapOrNull(j['moonraker']),
-        webui: _mapOrNull(j['webui']),
-        kiauh: _mapOrNull(j['kiauh']),
-        crowsnest: _mapOrNull(j['crowsnest']),
-      );
+    moonraker: _mapOrNull(j['moonraker']),
+    webui: _mapOrNull(j['webui']),
+    kiauh: _mapOrNull(j['kiauh']),
+    crowsnest: _mapOrNull(j['crowsnest']),
+  );
 }
 
 class McuConfig {
@@ -310,38 +337,52 @@ class McuConfig {
   final String id;
   final String? displayName;
   final Map<String, dynamic> raw;
-  factory McuConfig.fromJson(Map<String, dynamic> j) =>
-      McuConfig(id: j['id'] as String, displayName: j['display_name'] as String?, raw: j);
+  factory McuConfig.fromJson(Map<String, dynamic> j) => McuConfig(
+    id: j['id'] as String,
+    displayName: j['display_name'] as String?,
+    raw: j,
+  );
 }
 
 class ScreenConfig {
-  const ScreenConfig({required this.id, required this.raw, this.displayName, this.status, this.recommended = false});
+  const ScreenConfig({
+    required this.id,
+    required this.raw,
+    this.displayName,
+    this.status,
+    this.recommended = false,
+  });
   final String id;
   final String? displayName;
   final String? status;
   final bool recommended;
   final Map<String, dynamic> raw;
   factory ScreenConfig.fromJson(Map<String, dynamic> j) => ScreenConfig(
-        id: j['id'] as String,
-        displayName: j['display_name'] as String?,
-        status: j['status'] as String?,
-        recommended: j['recommended'] as bool? ?? false,
-        raw: j,
-      );
+    id: j['id'] as String,
+    displayName: j['display_name'] as String?,
+    status: j['status'] as String?,
+    recommended: j['recommended'] as bool? ?? false,
+    raw: j,
+  );
 }
 
 class AddonConfig {
-  const AddonConfig({required this.id, required this.raw, this.kind, this.displayName});
+  const AddonConfig({
+    required this.id,
+    required this.raw,
+    this.kind,
+    this.displayName,
+  });
   final String id;
   final String? kind;
   final String? displayName;
   final Map<String, dynamic> raw;
   factory AddonConfig.fromJson(Map<String, dynamic> j) => AddonConfig(
-        id: j['id'] as String,
-        kind: j['kind'] as String?,
-        displayName: j['display_name'] as String?,
-        raw: j,
-      );
+    id: j['id'] as String,
+    kind: j['kind'] as String?,
+    displayName: j['display_name'] as String?,
+    raw: j,
+  );
 }
 
 class StockOsInventory {
@@ -357,81 +398,108 @@ class StockOsInventory {
   final List<StockPath> paths;
 
   factory StockOsInventory.fromJson(Map<String, dynamic> j) => StockOsInventory(
-        detections: _listOfMap(j['detections']).map(DetectionRule.fromJson).toList(),
-        services: _listOfMap(j['services']).map(StockService.fromJson).toList(),
-        files: _listOfMap(j['files']).map(StockFile.fromJson).toList(),
-        paths: _listOfMap(j['paths']).map(StockPath.fromJson).toList(),
-      );
+    detections: _listOfMap(
+      j['detections'],
+    ).map(DetectionRule.fromJson).toList(),
+    services: _listOfMap(j['services']).map(StockService.fromJson).toList(),
+    files: _listOfMap(j['files']).map(StockFile.fromJson).toList(),
+    paths: _listOfMap(j['paths']).map(StockPath.fromJson).toList(),
+  );
 }
 
 class DetectionRule {
-  const DetectionRule({required this.kind, required this.raw, this.required = true});
+  const DetectionRule({
+    required this.kind,
+    required this.raw,
+    this.required = true,
+  });
   final String kind;
   final bool required;
   final Map<String, dynamic> raw;
   factory DetectionRule.fromJson(Map<String, dynamic> j) => DetectionRule(
-        kind: j['kind'] as String,
-        required: j['required'] as bool? ?? true,
-        raw: j,
-      );
+    kind: j['kind'] as String,
+    required: j['required'] as bool? ?? true,
+    raw: j,
+  );
 }
 
 class StockService {
-  const StockService({required this.id, required this.displayName, required this.defaultAction, required this.raw});
+  const StockService({
+    required this.id,
+    required this.displayName,
+    required this.defaultAction,
+    required this.raw,
+  });
   final String id;
   final String displayName;
   final String defaultAction;
   final Map<String, dynamic> raw;
   factory StockService.fromJson(Map<String, dynamic> j) => StockService(
-        id: j['id'] as String,
-        displayName: j['display_name'] as String? ?? j['id'] as String,
-        defaultAction: j['default_action'] as String? ?? 'keep',
-        raw: j,
-      );
+    id: j['id'] as String,
+    displayName: j['display_name'] as String? ?? j['id'] as String,
+    defaultAction: j['default_action'] as String? ?? 'keep',
+    raw: j,
+  );
 }
 
 class StockFile {
-  const StockFile({required this.id, required this.displayName, required this.paths, required this.defaultAction, required this.raw});
+  const StockFile({
+    required this.id,
+    required this.displayName,
+    required this.paths,
+    required this.defaultAction,
+    required this.raw,
+  });
   final String id;
   final String displayName;
   final List<String> paths;
   final String defaultAction;
   final Map<String, dynamic> raw;
   factory StockFile.fromJson(Map<String, dynamic> j) => StockFile(
-        id: j['id'] as String,
-        displayName: j['display_name'] as String? ?? j['id'] as String,
-        paths: ((j['paths'] as List?) ?? const []).cast<String>(),
-        defaultAction: j['default_action'] as String? ?? 'delete',
-        raw: j,
-      );
+    id: j['id'] as String,
+    displayName: j['display_name'] as String? ?? j['id'] as String,
+    paths: ((j['paths'] as List?) ?? const []).cast<String>(),
+    defaultAction: j['default_action'] as String? ?? 'delete',
+    raw: j,
+  );
 }
 
 class StockPath {
-  const StockPath({required this.id, required this.path, required this.action, this.snapshotTo, this.role});
+  const StockPath({
+    required this.id,
+    required this.path,
+    required this.action,
+    this.snapshotTo,
+    this.role,
+  });
   final String id;
   final String path;
   final String action;
   final String? snapshotTo;
   final String? role;
   factory StockPath.fromJson(Map<String, dynamic> j) => StockPath(
-        id: j['id'] as String,
-        path: j['path'] as String,
-        action: j['action'] as String? ?? 'preserve',
-        snapshotTo: j['snapshot_to'] as String?,
-        role: j['role'] as String?,
-      );
+    id: j['id'] as String,
+    path: j['path'] as String,
+    action: j['action'] as String? ?? 'preserve',
+    snapshotTo: j['snapshot_to'] as String?,
+    role: j['role'] as String?,
+  );
 }
 
 class WizardConfig {
-  const WizardConfig({this.title, this.stepsOverride, this.extraSteps = const []});
+  const WizardConfig({
+    this.title,
+    this.stepsOverride,
+    this.extraSteps = const [],
+  });
   final String? title;
   final Map<String, dynamic>? stepsOverride;
   final List<Map<String, dynamic>> extraSteps;
   factory WizardConfig.fromJson(Map<String, dynamic> j) => WizardConfig(
-        title: j['title'] as String?,
-        stepsOverride: _mapOrNull(j['steps_override']),
-        extraSteps: _listOfMap(j['extra_steps']),
-      );
+    title: j['title'] as String?,
+    stepsOverride: _mapOrNull(j['steps_override']),
+    extraSteps: _listOfMap(j['extra_steps']),
+  );
 }
 
 class FlowConfig {
@@ -439,28 +507,37 @@ class FlowConfig {
   final FlowSpec? stockKeep;
   final FlowSpec? freshFlash;
   factory FlowConfig.fromJson(Map<String, dynamic> j) => FlowConfig(
-        stockKeep: j['stock_keep'] is Map ? FlowSpec.fromJson((j['stock_keep'] as Map).cast()) : null,
-        freshFlash: j['fresh_flash'] is Map ? FlowSpec.fromJson((j['fresh_flash'] as Map).cast()) : null,
-      );
+    stockKeep: j['stock_keep'] is Map
+        ? FlowSpec.fromJson((j['stock_keep'] as Map).cast())
+        : null,
+    freshFlash: j['fresh_flash'] is Map
+        ? FlowSpec.fromJson((j['fresh_flash'] as Map).cast())
+        : null,
+  );
 }
 
 class FlowSpec {
-  const FlowSpec({this.enabled = false, this.preconditions = const [], this.steps = const []});
+  const FlowSpec({
+    this.enabled = false,
+    this.preconditions = const [],
+    this.steps = const [],
+  });
   final bool enabled;
   final List<Map<String, dynamic>> preconditions;
   final List<Map<String, dynamic>> steps;
   factory FlowSpec.fromJson(Map<String, dynamic> j) => FlowSpec(
-        enabled: j['enabled'] as bool? ?? false,
-        preconditions: _listOfMap(j['preconditions']),
-        steps: _listOfMap(j['steps']),
-      );
+    enabled: j['enabled'] as bool? ?? false,
+    preconditions: _listOfMap(j['preconditions']),
+    steps: _listOfMap(j['steps']),
+  );
 }
 
 class VerifierConfig {
   const VerifierConfig({required this.id, required this.raw});
   final String id;
   final Map<String, dynamic> raw;
-  factory VerifierConfig.fromJson(Map<String, dynamic> j) => VerifierConfig(id: j['id'] as String, raw: j);
+  factory VerifierConfig.fromJson(Map<String, dynamic> j) =>
+      VerifierConfig(id: j['id'] as String, raw: j);
 }
 
 // -----------------------------------------------------------------

@@ -7,7 +7,10 @@ abstract class ProfileService {
 
   /// Ensure a given profile tag is cached locally. Shallow-clones the
   /// deckhand-builds repo at that tag if needed.
-  Future<ProfileCacheEntry> ensureCached({required String profileId, String? ref});
+  Future<ProfileCacheEntry> ensureCached({
+    required String profileId,
+    String? ref,
+  });
 
   /// Parse a cached profile.yaml into an in-memory model.
   Future<PrinterProfile> load(ProfileCacheEntry cacheEntry);
@@ -32,7 +35,7 @@ class ProfileRegistryEntry {
   final String displayName;
   final String manufacturer;
   final String model;
-  final String status;        // stub | alpha | beta | stable | deprecated
+  final String status; // stub | alpha | beta | stable | deprecated
   final String directory;
   final String? latestTag;
 }

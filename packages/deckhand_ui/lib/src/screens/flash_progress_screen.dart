@@ -9,7 +9,8 @@ class FlashProgressScreen extends ConsumerStatefulWidget {
   const FlashProgressScreen({super.key});
 
   @override
-  ConsumerState<FlashProgressScreen> createState() => _FlashProgressScreenState();
+  ConsumerState<FlashProgressScreen> createState() =>
+      _FlashProgressScreenState();
 }
 
 class _FlashProgressScreenState extends ConsumerState<FlashProgressScreen> {

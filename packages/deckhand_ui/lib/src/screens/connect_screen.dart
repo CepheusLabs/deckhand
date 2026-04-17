@@ -30,7 +30,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _error = null;
     });
     try {
-      await ref.read(wizardControllerProvider).connectSsh(host: _hostController.text.trim());
+      await ref
+          .read(wizardControllerProvider)
+          .connectSsh(host: _hostController.text.trim());
       if (mounted) context.go('/verify');
     } catch (e) {
       setState(() => _error = '$e');
@@ -66,16 +68,24 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           if (_connecting) const LinearProgressIndicator(),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ],
         ],
       ),
       primaryAction: WizardAction(
         label: _connecting ? 'Connecting…' : 'Connect',
-        onPressed: _connecting || _hostController.text.trim().isEmpty ? null : _connect,
+        onPressed: _connecting || _hostController.text.trim().isEmpty
+            ? null
+            : _connect,
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/pick-printer')),
+        WizardAction(
+          label: 'Back',
+          onPressed: () => context.go('/pick-printer'),
+        ),
       ],
     );
   }

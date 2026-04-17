@@ -8,7 +8,11 @@ import 'dart:io';
 /// an in-memory ring buffer of the last N lines for the UI, and emits
 /// every entry on [stream] so screens can render live tails.
 class DeckhandLogger {
-  DeckhandLogger({required this.logsDir, this.ringSize = 2000, this.sessionName});
+  DeckhandLogger({
+    required this.logsDir,
+    this.ringSize = 2000,
+    this.sessionName,
+  });
 
   final String logsDir;
   final int ringSize;
@@ -34,7 +38,11 @@ class DeckhandLogger {
     await _rotate();
   }
 
-  void log(String message, {LogLevel level = LogLevel.info, Map<String, Object?>? data}) {
+  void log(
+    String message, {
+    LogLevel level = LogLevel.info,
+    Map<String, Object?>? data,
+  }) {
     final entry = LogEntry(
       timestamp: DateTime.now().toUtc(),
       level: level,
@@ -65,10 +73,13 @@ class DeckhandLogger {
     await Directory(destDir).create(recursive: true);
     final ts = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
     final tarPath = '$destDir/deckhand-debug-$ts.tar';
-    final result = await Process.run(
-      'tar',
-      ['-cf', tarPath, '-C', logsDir, '.'],
-    );
+    final result = await Process.run('tar', [
+      '-cf',
+      tarPath,
+      '-C',
+      logsDir,
+      '.',
+    ]);
     if (result.exitCode != 0) {
       throw Exception('debug bundle tar failed: ${result.stderr}');
     }
@@ -93,11 +104,14 @@ class DeckhandLogger {
   Future<void> _rotate() async {
     final dir = Directory(logsDir);
     if (!await dir.exists()) return;
-    final files = (await dir.list().toList())
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.jsonl'))
-        .toList()
-      ..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+    final files =
+        (await dir.list().toList())
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.jsonl'))
+            .toList()
+          ..sort(
+            (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+          );
     for (final old in files.skip(10)) {
       try {
         await old.delete();
@@ -122,9 +136,9 @@ class LogEntry {
   final Map<String, Object?>? data;
 
   Map<String, Object?> toJson() => {
-        't': timestamp.toIso8601String(),
-        'l': level.name,
-        'm': message,
-        if (data != null) 'd': data,
-      };
+    't': timestamp.toIso8601String(),
+    'l': level.name,
+    'm': message,
+    if (data != null) 'd': data,
+  };
 }

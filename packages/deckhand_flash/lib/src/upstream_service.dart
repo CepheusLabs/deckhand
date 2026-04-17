@@ -10,7 +10,7 @@ import 'sidecar_client.dart';
 /// HTTPS using Dio + GitHub's Releases API.
 class SidecarUpstreamService implements UpstreamService {
   SidecarUpstreamService({required this.sidecar, Dio? dio})
-      : _dio = dio ?? Dio();
+    : _dio = dio ?? Dio();
 
   final SidecarClient sidecar;
   final Dio _dio;
@@ -54,7 +54,8 @@ class SidecarUpstreamService implements UpstreamService {
     );
     if (match.isEmpty) {
       throw UpstreamException(
-          'no asset in $repoSlug@$tagName matches "$assetPattern"');
+        'no asset in $repoSlug@$tagName matches "$assetPattern"',
+      );
     }
     final dlUrl = match['browser_download_url'] as String;
     final assetName = match['name'] as String;

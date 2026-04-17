@@ -23,7 +23,11 @@ class DoneScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
-            leading: const Icon(Icons.check_circle_outline, color: Colors.green, size: 32),
+            leading: const Icon(
+              Icons.check_circle_outline,
+              color: Colors.green,
+              size: 32,
+            ),
             title: Text(state.profileId),
             subtitle: state.sshHost != null
                 ? Text('Connected to ${state.sshHost}')
@@ -36,11 +40,26 @@ class DoneScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Next steps', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Next steps',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
-                  _TipRow(icon: Icons.public, text: 'Open the web UI at http://${state.sshHost ?? "<printer>"}:8808 (Fluidd) or :81 (Mainsail)'),
-                  _TipRow(icon: Icons.update, text: 'Updates to Klipper/Moonraker/Fluidd/Mainsail run from the web UI\'s Update Manager'),
-                  _TipRow(icon: Icons.terminal, text: 'For stack tweaks later: ssh in and run ./kiauh/kiauh.sh'),
+                  _TipRow(
+                    icon: Icons.public,
+                    text:
+                        'Open the web UI at http://${state.sshHost ?? "<printer>"}:8808 (Fluidd) or :81 (Mainsail)',
+                  ),
+                  _TipRow(
+                    icon: Icons.update,
+                    text:
+                        'Updates to Klipper/Moonraker/Fluidd/Mainsail run from the web UI\'s Update Manager',
+                  ),
+                  _TipRow(
+                    icon: Icons.terminal,
+                    text:
+                        'For stack tweaks later: ssh in and run ./kiauh/kiauh.sh',
+                  ),
                 ],
               ),
             ),
@@ -61,14 +80,14 @@ class _TipRow extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(text)),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
+    ),
+  );
 }

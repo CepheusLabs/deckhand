@@ -26,7 +26,12 @@ abstract class SshService {
 
   Stream<String> runStream(SshSession session, String command);
 
-  Future<int> upload(SshSession session, String localPath, String remotePath, {int? mode});
+  Future<int> upload(
+    SshSession session,
+    String localPath,
+    String remotePath, {
+    int? mode,
+  });
 
   Future<int> download(SshSession session, String remotePath, String localPath);
 
@@ -34,7 +39,12 @@ abstract class SshService {
 }
 
 class SshSession {
-  const SshSession({required this.id, required this.host, required this.port, required this.user});
+  const SshSession({
+    required this.id,
+    required this.host,
+    required this.port,
+    required this.user,
+  });
   final String id;
   final String host;
   final int port;
@@ -52,14 +62,22 @@ class PasswordCredential extends SshCredential {
 }
 
 class KeyCredential extends SshCredential {
-  const KeyCredential({required this.user, required this.privateKeyPath, this.passphrase});
+  const KeyCredential({
+    required this.user,
+    required this.privateKeyPath,
+    this.passphrase,
+  });
   final String user;
   final String privateKeyPath;
   final String? passphrase;
 }
 
 class SshCommandResult {
-  const SshCommandResult({required this.stdout, required this.stderr, required this.exitCode});
+  const SshCommandResult({
+    required this.stdout,
+    required this.stderr,
+    required this.exitCode,
+  });
   final String stdout;
   final String stderr;
   final int exitCode;

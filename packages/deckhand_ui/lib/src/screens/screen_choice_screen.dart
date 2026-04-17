@@ -18,8 +18,11 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = ref.watch(wizardControllerProvider).profile?.screens ?? const [];
-    _choice ??= screens.firstWhere((s) => s.recommended, orElse: () => screens.first).id;
+    final screens =
+        ref.watch(wizardControllerProvider).profile?.screens ?? const [];
+    _choice ??= screens
+        .firstWhere((s) => s.recommended, orElse: () => screens.first)
+        .id;
 
     return WizardScaffold(
       stepper: const DeckhandStepper(),
@@ -52,7 +55,9 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
         onPressed: _choice == null
             ? null
             : () async {
-                await ref.read(wizardControllerProvider).setDecision('screen', _choice!);
+                await ref
+                    .read(wizardControllerProvider)
+                    .setDecision('screen', _choice!);
                 if (context.mounted) context.go('/services');
               },
       ),

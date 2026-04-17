@@ -32,7 +32,8 @@ class _ChoosePathScreenState extends ConsumerState<ChoosePathScreen> {
           _PathCard(
             icon: Icons.swap_horiz,
             title: 'Keep my current OS',
-            body: 'Transforms your printer in place. Snapshots the stock '
+            body:
+                'Transforms your printer in place. Snapshots the stock '
                 'Klipper install, then swaps in the firmware you pick. Any '
                 'vendor services you don\'t want are disabled or removed per '
                 'your selections.',
@@ -43,7 +44,8 @@ class _ChoosePathScreenState extends ConsumerState<ChoosePathScreen> {
           _PathCard(
             icon: Icons.refresh,
             title: 'Flash a new OS',
-            body: 'Wipes the eMMC and installs a clean Armbian image. '
+            body:
+                'Wipes the eMMC and installs a clean Armbian image. '
                 'Strongly preferred if you have an eMMC-to-USB adapter handy '
                 'and want a fully known-good base.',
             selected: _choice == WizardFlow.freshFlash,

@@ -26,7 +26,8 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
     return WizardScaffold(
       stepper: const DeckhandStepper(),
       title: 'Confirm the wipe',
-      helperText: 'About to write $osId to $diskId. '
+      helperText:
+          'About to write $osId to $diskId. '
           'This erases EVERYTHING on that disk. No undo.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,8 +38,10 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: theme.colorScheme.onErrorContainer),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -46,7 +49,8 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
                       'existing contents. Double-check the disk identifier '
                       'before continuing.',
                       style: TextStyle(
-                          color: theme.colorScheme.onErrorContainer),
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
                     ),
                   ),
                 ],
@@ -57,7 +61,9 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
           CheckboxListTile(
             value: _backedUp,
             onChanged: (v) => setState(() => _backedUp = v ?? false),
-            title: const Text('I\'ve backed up anything I need from this disk.'),
+            title: const Text(
+              'I\'ve backed up anything I need from this disk.',
+            ),
           ),
           CheckboxListTile(
             value: _understand,
@@ -72,7 +78,8 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
         onPressed: _backedUp && _understand
             ? () async {
                 final ok = await _finalConfirm(context, diskId ?? '?');
-                if (ok == true && context.mounted) context.go('/flash-progress');
+                if (ok == true && context.mounted)
+                  context.go('/flash-progress');
               }
             : null,
       ),
@@ -87,7 +94,9 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Wipe $diskId?'),
-          content: const Text('This action is irreversible. Confirm to proceed.'),
+          content: const Text(
+            'This action is irreversible. Confirm to proceed.',
+          ),
           actions: [
             TextButton(
               autofocus: true,

@@ -6,7 +6,7 @@ import 'dart:io';
 /// real settings land.
 class DeckhandSettings {
   DeckhandSettings({required this.path, Map<String, dynamic>? initial})
-      : _values = Map.of(initial ?? const {});
+    : _values = Map.of(initial ?? const {});
 
   final String path;
   final Map<String, dynamic> _values;
@@ -57,6 +57,8 @@ class DeckhandSettings {
   Future<void> save() async {
     final file = File(path);
     await file.parent.create(recursive: true);
-    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(_values));
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(_values),
+    );
   }
 }

@@ -37,8 +37,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                 children: [
                   Text('Flow: ${state.flow.name}'),
                   Text('Printer: ${state.profileId}'),
-                  if (state.sshHost != null)
-                    Text('SSH host: ${state.sshHost}'),
+                  if (state.sshHost != null) Text('SSH host: ${state.sshHost}'),
                   const SizedBox(height: 8),
                   const Divider(),
                   const SizedBox(height: 8),

@@ -21,7 +21,9 @@ class DslEvaluator {
     final parser = _Parser(tokens);
     final node = parser.parseExpr();
     if (!parser.isAtEnd) {
-      throw DslException('unexpected tokens after expression: ${parser.peek()}');
+      throw DslException(
+        'unexpected tokens after expression: ${parser.peek()}',
+      );
     }
     return _eval(node, env);
   }
@@ -87,37 +89,37 @@ class DslException implements Exception {
 /// Default predicates shipped with Deckhand. Registered by the runtime
 /// before evaluating profile expressions.
 Map<String, DslPredicate> defaultPredicates() => {
-      'equals': (args, env) {
-        _expect(args, 2, 'equals');
-        final v = env.getDecision(args[0] as String);
-        return v == args[1];
-      },
-      'in_set': (args, env) {
-        _expect(args, 2, 'in_set');
-        final v = env.getDecision(args[0] as String);
-        final list = (args[1] as List?) ?? const [];
-        return list.contains(v);
-      },
-      'selected': (args, env) {
-        _expect(args, 2, 'selected');
-        final stepId = args[0] as String;
-        final optionId = args[1] as String;
-        final decision = env.getDecision(stepId);
-        return decision == optionId;
-      },
-      'profile_field_equals': (args, env) {
-        _expect(args, 2, 'profile_field_equals');
-        return env.getProfileField(args[0] as String) == args[1];
-      },
-      'decision_made': (args, env) {
-        _expect(args, 1, 'decision_made');
-        return env.decisions.containsKey(args[0] as String);
-      },
-      // Async probes are evaluated by pre-caching their result. When the
-      // UI walks a tree of expressions it pre-resolves any async lookups
-      // and stores them under the probe's canonical key. The synchronous
-      // predicate then reads back from decisions.
-    };
+  'equals': (args, env) {
+    _expect(args, 2, 'equals');
+    final v = env.getDecision(args[0] as String);
+    return v == args[1];
+  },
+  'in_set': (args, env) {
+    _expect(args, 2, 'in_set');
+    final v = env.getDecision(args[0] as String);
+    final list = (args[1] as List?) ?? const [];
+    return list.contains(v);
+  },
+  'selected': (args, env) {
+    _expect(args, 2, 'selected');
+    final stepId = args[0] as String;
+    final optionId = args[1] as String;
+    final decision = env.getDecision(stepId);
+    return decision == optionId;
+  },
+  'profile_field_equals': (args, env) {
+    _expect(args, 2, 'profile_field_equals');
+    return env.getProfileField(args[0] as String) == args[1];
+  },
+  'decision_made': (args, env) {
+    _expect(args, 1, 'decision_made');
+    return env.decisions.containsKey(args[0] as String);
+  },
+  // Async probes are evaluated by pre-caching their result. When the
+  // UI walks a tree of expressions it pre-resolves any async lookups
+  // and stores them under the probe's canonical key. The synchronous
+  // predicate then reads back from decisions.
+};
 
 void _expect(List<Object?> args, int n, String name) {
   if (args.length != n) {
@@ -178,7 +180,8 @@ List<_Token> _tokenize(String src) {
       i = end + 1;
       continue;
     }
-    if (_isDigit(c) || (c == '-' && i + 1 < src.length && _isDigit(src[i + 1]))) {
+    if (_isDigit(c) ||
+        (c == '-' && i + 1 < src.length && _isDigit(src[i + 1]))) {
       var j = i + 1;
       while (j < src.length && (_isDigit(src[j]) || src[j] == '.')) {
         j++;

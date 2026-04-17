@@ -37,7 +37,9 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
           body = _ErrorBox(
             message: 'Failed to load printer registry: ${snap.error}',
             onRetry: () => setState(() {
-              _registryFuture = ref.read(profileServiceProvider).fetchRegistry();
+              _registryFuture = ref
+                  .read(profileServiceProvider)
+                  .fetchRegistry();
             }),
           );
         } else {
@@ -62,18 +64,20 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
                 spacing: 12,
                 runSpacing: 12,
                 children: entries
-                    .map((e) => _PrinterCard(
-                          entry: e,
-                          selected: _selectedId == e.id,
-                          onTap: () => setState(() => _selectedId = e.id),
-                        ))
+                    .map(
+                      (e) => _PrinterCard(
+                        entry: e,
+                        selected: _selectedId == e.id,
+                        onTap: () => setState(() => _selectedId = e.id),
+                      ),
+                    )
                     .toList(),
               ),
             ],
           );
         }
         return WizardScaffold(
-      stepper: const DeckhandStepper(),
+          stepper: const DeckhandStepper(),
           title: 'Which printer are you setting up?',
           helperText:
               'Deckhand supports these printers. Pick yours — we use that '
@@ -99,7 +103,11 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
 }
 
 class _PrinterCard extends StatelessWidget {
-  const _PrinterCard({required this.entry, required this.selected, required this.onTap});
+  const _PrinterCard({
+    required this.entry,
+    required this.selected,
+    required this.onTap,
+  });
   final ProfileRegistryEntry entry;
   final bool selected;
   final VoidCallback onTap;
@@ -120,9 +128,12 @@ class _PrinterCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.manufacturer,
-                    style: t.textTheme.labelLarge
-                        ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                Text(
+                  entry.manufacturer,
+                  style: t.textTheme.labelLarge?.copyWith(
+                    color: t.colorScheme.onSurfaceVariant,
+                  ),
+                ),
                 Text(entry.displayName, style: t.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 _StatusChip(status: entry.status),
@@ -168,7 +179,10 @@ class _ErrorBox extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(message, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        Text(
+          message,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
         const SizedBox(height: 12),
         OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
       ],

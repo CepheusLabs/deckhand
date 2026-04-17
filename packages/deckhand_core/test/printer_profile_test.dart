@@ -24,7 +24,12 @@ void main() {
         },
         'firmware': {
           'choices': [
-            {'id': 'kalico', 'display_name': 'Kalico', 'repo': 'http://k', 'ref': 'main'},
+            {
+              'id': 'kalico',
+              'display_name': 'Kalico',
+              'repo': 'http://k',
+              'ref': 'main',
+            },
           ],
           'default_choice': 'kalico',
         },
@@ -90,7 +95,11 @@ void main() {
             },
           ],
           'paths': [
-            {'id': 'klipper', 'path': '/home/mks/klipper', 'action': 'snapshot_and_replace'},
+            {
+              'id': 'klipper',
+              'path': '/home/mks/klipper',
+              'action': 'snapshot_and_replace',
+            },
           ],
         },
       });

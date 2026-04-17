@@ -78,13 +78,17 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
         ),
         child: ListView.builder(
           itemCount: _log.length,
-          itemBuilder: (_, i) => Text(_log[i],
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+          itemBuilder: (_, i) => Text(
+            _log[i],
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
         ),
       ),
       primaryAction: WizardAction(
         label: _done ? 'Finish' : (_failed ? 'Close' : 'Running…'),
-        onPressed: _done ? () => context.go('/done') : (_failed ? () => context.go('/') : null),
+        onPressed: _done
+            ? () => context.go('/done')
+            : (_failed ? () => context.go('/') : null),
       ),
     );
   }

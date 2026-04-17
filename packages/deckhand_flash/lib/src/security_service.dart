@@ -9,7 +9,7 @@ import 'package:uuid/uuid.dart';
 /// allow-list state.
 class DefaultSecurityService implements SecurityService {
   DefaultSecurityService({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
   final _uuid = const Uuid();
@@ -70,7 +70,10 @@ class DefaultSecurityService implements SecurityService {
   }
 
   @override
-  Future<void> pinHostFingerprint({required String host, required String fingerprint}) async {
+  Future<void> pinHostFingerprint({
+    required String host,
+    required String fingerprint,
+  }) async {
     await _storage.write(key: _hostFpKey(host), value: fingerprint);
   }
 

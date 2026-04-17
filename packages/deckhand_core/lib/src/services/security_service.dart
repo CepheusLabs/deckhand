@@ -19,14 +19,21 @@ abstract class SecurityService {
 
   /// Persist [fingerprint] for [host]. Called on first successful SSH
   /// connect once the user accepts the fingerprint.
-  Future<void> pinHostFingerprint({required String host, required String fingerprint});
+  Future<void> pinHostFingerprint({
+    required String host,
+    required String fingerprint,
+  });
 
   /// Returns the pinned fingerprint for [host], or null if none pinned.
   Future<String?> pinnedHostFingerprint(String host);
 }
 
 class ConfirmationToken {
-  const ConfirmationToken({required this.value, required this.expiresAt, required this.operation});
+  const ConfirmationToken({
+    required this.value,
+    required this.expiresAt,
+    required this.operation,
+  });
   final String value;
   final DateTime expiresAt;
   final String operation;

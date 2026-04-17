@@ -14,7 +14,10 @@ void main() {
         isTrue,
       );
       expect(
-        dsl.evaluate('selected(screen, voronFDM)', env({'screen': 'arco_screen'})),
+        dsl.evaluate(
+          'selected(screen, voronFDM)',
+          env({'screen': 'arco_screen'}),
+        ),
         isFalse,
       );
     });
@@ -69,7 +72,10 @@ void main() {
     });
 
     test('unknown predicate throws', () {
-      expect(() => dsl.evaluate('made_up()', env({})), throwsA(isA<DslException>()));
+      expect(
+        () => dsl.evaluate('made_up()', env({})),
+        throwsA(isA<DslException>()),
+      );
     });
 
     test('parentheses force precedence', () {

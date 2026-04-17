@@ -22,7 +22,9 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   String? _action;
 
   List<StockService> get _serviceQueue {
-    final all = ref.read(wizardControllerProvider).profile?.stockOs.services ?? const [];
+    final all =
+        ref.read(wizardControllerProvider).profile?.stockOs.services ??
+        const [];
     return all.where((s) {
       final w = s.raw['wizard'];
       return w != null && w != 'none';
@@ -54,7 +56,8 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       return const SizedBox.shrink();
     }
     final svc = queue[_index];
-    final wiz = (svc.raw['wizard'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final wiz =
+        (svc.raw['wizard'] as Map?)?.cast<String, dynamic>() ?? const {};
     final options = ((wiz['options'] as List?) ?? const []).cast<Map>();
 
     return WizardScaffold(
@@ -64,12 +67,16 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${_index + 1} of ${queue.length}',
-              style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            '${_index + 1} of ${queue.length}',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
           const SizedBox(height: 12),
           if (wiz['question'] != null)
-            Text(wiz['question'] as String,
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              wiz['question'] as String,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
           const SizedBox(height: 16),
           for (final opt in options)
             RadioListTile<String>(

@@ -27,10 +27,13 @@ sealed class DeckhandException implements Exception {
 // Connection
 
 class SshConnectionException extends DeckhandException {
-  const SshConnectionException({required String host, required int port, Object? cause})
-      : _host = host,
-        _port = port,
-        super('Could not connect to $host:$port', cause: cause);
+  const SshConnectionException({
+    required String host,
+    required int port,
+    Object? cause,
+  }) : _host = host,
+       _port = port,
+       super('Could not connect to $host:$port', cause: cause);
   final String _host;
   final int _port;
   @override
@@ -44,8 +47,8 @@ class SshConnectionException extends DeckhandException {
 
 class SshAuthException extends DeckhandException {
   const SshAuthException({required String host, Object? cause})
-      : _host = host,
-        super('SSH authentication failed for $host', cause: cause);
+    : _host = host,
+      super('SSH authentication failed for $host', cause: cause);
   final String _host;
   @override
   String get userTitle => 'Couldn\'t sign in to the printer';
@@ -57,10 +60,12 @@ class SshAuthException extends DeckhandException {
 }
 
 class HostKeyMismatchException extends DeckhandException {
-  const HostKeyMismatchException({required String host, required String fingerprint})
-      : _host = host,
-        _fp = fingerprint,
-        super('Host key mismatch for $host ($fingerprint)');
+  const HostKeyMismatchException({
+    required String host,
+    required String fingerprint,
+  }) : _host = host,
+       _fp = fingerprint,
+       super('Host key mismatch for $host ($fingerprint)');
   final String _host;
   final String _fp;
   @override
@@ -90,8 +95,8 @@ class DiskEnumerationException extends DeckhandException {
 
 class ElevationRequiredException extends DeckhandException {
   const ElevationRequiredException({required String op})
-      : _op = op,
-        super('Elevation required for operation "$op"');
+    : _op = op,
+      super('Elevation required for operation "$op"');
   final String _op;
   @override
   String get userTitle => 'Administrator permission required';
@@ -141,10 +146,13 @@ class SidecarStartException extends DeckhandException {
 }
 
 class SidecarRpcException extends DeckhandException {
-  const SidecarRpcException({required String method, required int code, required String reason})
-      : _method = method,
-        _code = code,
-        super('Sidecar RPC $method failed (code $code): $reason');
+  const SidecarRpcException({
+    required String method,
+    required int code,
+    required String reason,
+  }) : _method = method,
+       _code = code,
+       super('Sidecar RPC $method failed (code $code): $reason');
   final String _method;
   final int _code;
   @override

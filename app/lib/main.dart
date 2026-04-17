@@ -35,22 +35,24 @@ Future<void> main() async {
     debugPrint('Sidecar failed to start: $e\n$st');
   }
 
-  runApp(ProviderScope(
-    overrides: [
-      profileServiceProvider.overrideWithValue(SidecarProfileService(
-        sidecar: sidecar,
-        paths: paths,
-      )),
-      sshServiceProvider.overrideWithValue(DartsshService()),
-      flashServiceProvider.overrideWithValue(SidecarFlashService(sidecar)),
-      discoveryServiceProvider.overrideWithValue(BonsoirDiscoveryService()),
-      moonrakerServiceProvider.overrideWithValue(MoonrakerHttpService()),
-      upstreamServiceProvider
-          .overrideWithValue(SidecarUpstreamService(sidecar: sidecar)),
-      securityServiceProvider.overrideWithValue(DefaultSecurityService()),
-    ],
-    child: const WizardShell(),
-  ));
+  runApp(
+    ProviderScope(
+      overrides: [
+        profileServiceProvider.overrideWithValue(
+          SidecarProfileService(sidecar: sidecar, paths: paths),
+        ),
+        sshServiceProvider.overrideWithValue(DartsshService()),
+        flashServiceProvider.overrideWithValue(SidecarFlashService(sidecar)),
+        discoveryServiceProvider.overrideWithValue(BonsoirDiscoveryService()),
+        moonrakerServiceProvider.overrideWithValue(MoonrakerHttpService()),
+        upstreamServiceProvider.overrideWithValue(
+          SidecarUpstreamService(sidecar: sidecar),
+        ),
+        securityServiceProvider.overrideWithValue(DefaultSecurityService()),
+      ],
+      child: const WizardShell(),
+    ),
+  );
 }
 
 String _resolveSidecarPath() {

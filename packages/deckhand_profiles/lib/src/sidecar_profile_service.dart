@@ -29,20 +29,24 @@ class SidecarProfileService implements ProfileService {
 
   @override
   Future<ProfileRegistry> fetchRegistry({bool force = false}) async {
-    final res = await _dio.get<String>(registryUrl,
-        options: Options(responseType: ResponseType.plain));
+    final res = await _dio.get<String>(
+      registryUrl,
+      options: Options(responseType: ResponseType.plain),
+    );
     final yaml = loadYaml(res.data ?? '') as YamlMap;
     final entries = (yaml['profiles'] as YamlList? ?? YamlList())
         .map((e) => (e as YamlMap))
-        .map((e) => ProfileRegistryEntry(
-              id: e['id'] as String,
-              displayName: e['display_name'] as String,
-              manufacturer: e['manufacturer'] as String? ?? '',
-              model: e['model'] as String? ?? '',
-              status: e['status'] as String? ?? 'alpha',
-              directory: e['directory'] as String? ?? 'printers/${e['id']}',
-              latestTag: e['latest_tag'] as String?,
-            ))
+        .map(
+          (e) => ProfileRegistryEntry(
+            id: e['id'] as String,
+            displayName: e['display_name'] as String,
+            manufacturer: e['manufacturer'] as String? ?? '',
+            model: e['model'] as String? ?? '',
+            status: e['status'] as String? ?? 'alpha',
+            directory: e['directory'] as String? ?? 'printers/${e['id']}',
+            latestTag: e['latest_tag'] as String?,
+          ),
+        )
         .toList();
     return ProfileRegistry(entries: entries);
   }
@@ -92,7 +96,11 @@ class SidecarProfileService implements ProfileService {
 // pure Dart Map/List for downstream models.
 Object? _deepConvert(Object? node) {
   if (node is YamlMap) {
-    return Map<String, dynamic>.fromEntries(node.entries.map((e) => MapEntry(e.key.toString(), _deepConvert(e.value))));
+    return Map<String, dynamic>.fromEntries(
+      node.entries.map(
+        (e) => MapEntry(e.key.toString(), _deepConvert(e.value)),
+      ),
+    );
   }
   if (node is YamlList) {
     return node.map(_deepConvert).toList();

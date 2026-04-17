@@ -17,8 +17,9 @@ class DeckhandStepper extends ConsumerWidget {
     final flow = ref.watch(wizardControllerProvider).state.flow;
     final currentLocation = GoRouterState.of(context).uri.path;
     final steps = _stepsForFlow(flow);
-    final currentIndex =
-        steps.indexWhere((s) => s.routes.contains(currentLocation));
+    final currentIndex = steps.indexWhere(
+      (s) => s.routes.contains(currentLocation),
+    );
 
     return WizardStepper(
       steps: steps.map((s) => WizardStepperItem(label: s.label)).toList(),

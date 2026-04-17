@@ -6,17 +6,24 @@ import 'package:dio/dio.dart';
 /// no WebSocket needed.
 class MoonrakerHttpService implements MoonrakerService {
   MoonrakerHttpService({Dio? dio})
-      : _dio = dio ?? Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               connectTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 5),
-            ));
+            ),
+          );
 
   final Dio _dio;
 
   @override
   Future<KlippyInfo> info({required String host, int port = 7125}) async {
-    final res = await _dio.get<Map<String, dynamic>>('http://$host:$port/printer/info');
-    final r = (res.data?['result'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final res = await _dio.get<Map<String, dynamic>>(
+      'http://$host:$port/printer/info',
+    );
+    final r =
+        (res.data?['result'] as Map?)?.cast<String, dynamic>() ?? const {};
     return KlippyInfo(
       state: r['state'] as String? ?? 'unknown',
       hostname: r['hostname'] as String? ?? host,

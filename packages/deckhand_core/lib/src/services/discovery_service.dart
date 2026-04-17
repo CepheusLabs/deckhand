@@ -1,7 +1,9 @@
 /// Find printers on the LAN (mDNS) and verify reachability.
 abstract class DiscoveryService {
   /// mDNS scan for Moonraker services (`_moonraker._tcp.local`).
-  Future<List<DiscoveredPrinter>> scanMdns({Duration timeout = const Duration(seconds: 5)});
+  Future<List<DiscoveredPrinter>> scanMdns({
+    Duration timeout = const Duration(seconds: 5),
+  });
 
   /// Optional: plain TCP sweep over a CIDR for Moonraker's port.
   Future<List<DiscoveredPrinter>> scanCidr({

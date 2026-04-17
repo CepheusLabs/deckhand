@@ -7,20 +7,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 T _throwUnimplemented<T>(String name) =>
     throw UnimplementedError('Provider $name not overridden at app startup');
 
-final profileServiceProvider =
-    Provider<ProfileService>((_) => _throwUnimplemented('profileServiceProvider'));
-final sshServiceProvider =
-    Provider<SshService>((_) => _throwUnimplemented('sshServiceProvider'));
-final flashServiceProvider =
-    Provider<FlashService>((_) => _throwUnimplemented('flashServiceProvider'));
-final discoveryServiceProvider =
-    Provider<DiscoveryService>((_) => _throwUnimplemented('discoveryServiceProvider'));
-final moonrakerServiceProvider =
-    Provider<MoonrakerService>((_) => _throwUnimplemented('moonrakerServiceProvider'));
-final upstreamServiceProvider =
-    Provider<UpstreamService>((_) => _throwUnimplemented('upstreamServiceProvider'));
-final securityServiceProvider =
-    Provider<SecurityService>((_) => _throwUnimplemented('securityServiceProvider'));
+final profileServiceProvider = Provider<ProfileService>(
+  (_) => _throwUnimplemented('profileServiceProvider'),
+);
+final sshServiceProvider = Provider<SshService>(
+  (_) => _throwUnimplemented('sshServiceProvider'),
+);
+final flashServiceProvider = Provider<FlashService>(
+  (_) => _throwUnimplemented('flashServiceProvider'),
+);
+final discoveryServiceProvider = Provider<DiscoveryService>(
+  (_) => _throwUnimplemented('discoveryServiceProvider'),
+);
+final moonrakerServiceProvider = Provider<MoonrakerService>(
+  (_) => _throwUnimplemented('moonrakerServiceProvider'),
+);
+final upstreamServiceProvider = Provider<UpstreamService>(
+  (_) => _throwUnimplemented('upstreamServiceProvider'),
+);
+final securityServiceProvider = Provider<SecurityService>(
+  (_) => _throwUnimplemented('securityServiceProvider'),
+);
 
 final wizardControllerProvider = Provider<WizardController>((ref) {
   final controller = WizardController(

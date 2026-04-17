@@ -18,8 +18,11 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final options = ref.watch(wizardControllerProvider).profile?.os.freshInstallOptions ?? const [];
-    _choice ??= options.where((o) => o.recommended).firstOrNull?.id ??
+    final options =
+        ref.watch(wizardControllerProvider).profile?.os.freshInstallOptions ??
+        const [];
+    _choice ??=
+        options.where((o) => o.recommended).firstOrNull?.id ??
         options.firstOrNull?.id;
 
     return WizardScaffold(
@@ -52,11 +55,13 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
                     ],
                   ],
                 ),
-                subtitle: Text([
-                  opt.notes?.trim() ?? '',
-                  if (opt.sizeBytesApprox != null)
-                    '~${(opt.sizeBytesApprox! / (1 << 30)).toStringAsFixed(1)} GB download',
-                ].where((s) => s.isNotEmpty).join('\n')),
+                subtitle: Text(
+                  [
+                    opt.notes?.trim() ?? '',
+                    if (opt.sizeBytesApprox != null)
+                      '~${(opt.sizeBytesApprox! / (1 << 30)).toStringAsFixed(1)} GB download',
+                  ].where((s) => s.isNotEmpty).join('\n'),
+                ),
               ),
             ),
         ],
@@ -73,7 +78,10 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
               },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/flash-target')),
+        WizardAction(
+          label: 'Back',
+          onPressed: () => context.go('/flash-target'),
+        ),
       ],
     );
   }

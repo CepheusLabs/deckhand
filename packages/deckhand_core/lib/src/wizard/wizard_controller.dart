@@ -64,7 +64,9 @@ class WizardController {
       throw StateError('Load a profile before connecting SSH.');
     }
     final creds = pf.ssh.defaultCredentials
-        .map((c) => PasswordCredential(user: c.user, password: c.password ?? ''))
+        .map(
+          (c) => PasswordCredential(user: c.user, password: c.password ?? ''),
+        )
         .toList();
     final session = await ssh.tryDefaults(
       host: host,
@@ -86,12 +88,15 @@ class WizardController {
   T? decision<T>(String path) => _state.decisions[path] as T?;
 
   String resolveServiceDefault(StockService svc) {
-    final rules = ((svc.raw['wizard'] as Map?)?['default_rules'] as List?) ?? const [];
+    final rules =
+        ((svc.raw['wizard'] as Map?)?['default_rules'] as List?) ?? const [];
     final env = DslEnv(
       decisions: _state.decisions,
       profile: _profile?.raw ?? const {},
     );
-    for (final r in rules.whereType<Map>().map((m) => m.cast<String, dynamic>())) {
+    for (final r in rules.whereType<Map>().map(
+      (m) => m.cast<String, dynamic>(),
+    )) {
       final when = r['when'] as String?;
       final thenVal = r['then'] as String?;
       if (when == null || thenVal == null) continue;
@@ -179,10 +184,12 @@ class WizardController {
       case 'disk_picker':
         await _awaitUserInput(id, step);
       default:
-        _emit(StepWarning(
-          stepId: id,
-          message: 'Unknown step kind "$kind" — skipping',
-        ));
+        _emit(
+          StepWarning(
+            stepId: id,
+            message: 'Unknown step kind "$kind" — skipping',
+          ),
+        );
     }
   }
 
@@ -195,7 +202,10 @@ class WizardController {
       final res = await ssh.run(s, rendered);
       _log(step, '[ssh] $rendered → exit ${res.exitCode}');
       if (!res.success && !ignore) {
-        throw StepExecutionException('Command failed: $rendered', stderr: res.stderr);
+        throw StepExecutionException(
+          'Command failed: $rendered',
+          stderr: res.stderr,
+        );
       }
     }
   }
@@ -212,11 +222,15 @@ class WizardController {
       final snapshotTo = (path.snapshotTo ?? '${path.path}.stock.{{timestamp}}')
           .replaceAll('{{timestamp}}', ts);
       final rendered = _render(snapshotTo);
-      final cmd = 'if [ -e "${path.path}" ]; then mv "${path.path}" "$rendered"; fi';
+      final cmd =
+          'if [ -e "${path.path}" ]; then mv "${path.path}" "$rendered"; fi';
       final res = await ssh.run(s, cmd);
       _log(step, '[snapshot] ${path.path} → $rendered (exit ${res.exitCode})');
       if (!res.success) {
-        throw StepExecutionException('snapshot failed for ${path.path}', stderr: res.stderr);
+        throw StepExecutionException(
+          'snapshot failed for ${path.path}',
+          stderr: res.stderr,
+        );
       }
     }
   }
@@ -230,7 +244,11 @@ class WizardController {
     final cloneCmd =
         'if [ -d "$install/.git" ]; then cd "$install" && git fetch origin && git checkout ${fw.ref} && git pull --ff-only; '
         'else rm -rf "$install" && git clone --depth 1 -b ${fw.ref} ${fw.repo} "$install"; fi';
-    final cloneRes = await ssh.run(s, cloneCmd, timeout: const Duration(minutes: 10));
+    final cloneRes = await ssh.run(
+      s,
+      cloneCmd,
+      timeout: const Duration(minutes: 10),
+    );
     if (!cloneRes.success) {
       throw StepExecutionException('clone failed', stderr: cloneRes.stderr);
     }
@@ -240,7 +258,11 @@ class WizardController {
         'PY=\$(command -v python3.11 || command -v python3) && \$PY -m venv $venv && '
         '$venv/bin/pip install --quiet -U pip setuptools wheel && '
         '$venv/bin/pip install --quiet -r $install/scripts/klippy-requirements.txt';
-    final venvRes = await ssh.run(s, venvCmd, timeout: const Duration(minutes: 15));
+    final venvRes = await ssh.run(
+      s,
+      venvCmd,
+      timeout: const Duration(minutes: 15),
+    );
     if (!venvRes.success) {
       throw StepExecutionException('venv setup failed', stderr: venvRes.stderr);
     }
@@ -268,7 +290,8 @@ class WizardController {
 
   Future<void> _runInstallStack(Map<String, dynamic> step) async {
     final s = _requireSession();
-    final components = ((step['components'] as List?) ?? const []).cast<String>();
+    final components = ((step['components'] as List?) ?? const [])
+        .cast<String>();
     final stack = _profile!.stack;
     for (final c in components) {
       final name = c.replaceAll('?', '');
@@ -291,7 +314,10 @@ class WizardController {
             'else git clone --depth 1 -b $ref $repo "$install"; fi';
         final res = await ssh.run(s, cmd, timeout: const Duration(minutes: 10));
         if (!res.success) {
-          throw StepExecutionException('$name clone failed', stderr: res.stderr);
+          throw StepExecutionException(
+            '$name clone failed',
+            stderr: res.stderr,
+          );
         }
       }
       _log(step, '[stack] $name installed');
@@ -301,14 +327,18 @@ class WizardController {
   Future<void> _runApplyServices(Map<String, dynamic> step) async {
     final s = _requireSession();
     for (final svc in _profile!.stockOs.services) {
-      final action = _state.decisions['service.${svc.id}'] as String? ?? svc.defaultAction;
+      final action =
+          _state.decisions['service.${svc.id}'] as String? ?? svc.defaultAction;
       final unit = svc.raw['systemd_unit'] as String?;
       final proc = svc.raw['process_pattern'] as String?;
       switch (action) {
         case 'remove':
         case 'disable':
           if (unit != null) {
-            await ssh.run(s, 'sudo systemctl disable --now $unit 2>/dev/null || true');
+            await ssh.run(
+              s,
+              'sudo systemctl disable --now $unit 2>/dev/null || true',
+            );
           }
           if (proc != null) {
             await ssh.run(s, 'sudo pkill -f "$proc" 2>/dev/null || true');
@@ -325,7 +355,8 @@ class WizardController {
   Future<void> _runApplyFiles(Map<String, dynamic> step) async {
     final s = _requireSession();
     for (final f in _profile!.stockOs.files) {
-      final decision = _state.decisions['file.${f.id}'] as String? ?? f.defaultAction;
+      final decision =
+          _state.decisions['file.${f.id}'] as String? ?? f.defaultAction;
       if (decision != 'delete') continue;
       for (final path in f.paths) {
         if (_isDangerousPath(path)) {
@@ -344,7 +375,8 @@ class WizardController {
     final target = step['target'] as String?;
     final templatePath = step['template'] as String?;
     final content = step['content'] as String?;
-    if (target == null) throw StepExecutionException('write_file missing target');
+    if (target == null)
+      throw StepExecutionException('write_file missing target');
     String rendered;
     if (content != null) {
       rendered = _render(content);
@@ -354,8 +386,10 @@ class WizardController {
     } else {
       throw StepExecutionException('write_file requires template or content');
     }
-    final tmpLocal = p.join(Directory.systemTemp.path,
-        'deckhand-${DateTime.now().millisecondsSinceEpoch}.tmp');
+    final tmpLocal = p.join(
+      Directory.systemTemp.path,
+      'deckhand-${DateTime.now().millisecondsSinceEpoch}.tmp',
+    );
     await File(tmpLocal).writeAsString(rendered);
     try {
       await ssh.upload(s, tmpLocal, target);
@@ -388,17 +422,29 @@ class WizardController {
         final srcInstall = _resolveProfilePath(installScript);
         const remoteInstall = '~/deckhand-screen-install.sh';
         await ssh.upload(s, srcInstall, remoteInstall, mode: 493); // 0o755
-        final res = await ssh.run(s, 'bash $remoteInstall',
-            timeout: const Duration(minutes: 5));
+        final res = await ssh.run(
+          s,
+          'bash $remoteInstall',
+          timeout: const Duration(minutes: 5),
+        );
         if (!res.success) {
-          throw StepExecutionException('screen install script failed', stderr: res.stderr);
+          throw StepExecutionException(
+            'screen install script failed',
+            stderr: res.stderr,
+          );
         }
       }
       _log(step, '[screen] installed $screenId');
     } else if (sourceKind == 'restore_from_backup') {
-      _log(step, '[screen] $screenId restore-from-backup requires a mounted backup image — not yet automated');
+      _log(
+        step,
+        '[screen] $screenId restore-from-backup requires a mounted backup image — not yet automated',
+      );
     } else {
-      _log(step, '[screen] $screenId source kind "$sourceKind" not implemented');
+      _log(
+        step,
+        '[screen] $screenId source kind "$sourceKind" not implemented',
+      );
     }
   }
 
@@ -415,23 +461,37 @@ class WizardController {
       );
       final raw = mcu.raw;
       final configLines = _mcuConfig(raw);
-      final writeConf = 'cd $install && cat > .config <<"MCUCONF"\n$configLines\nMCUCONF\n'
+      final writeConf =
+          'cd $install && cat > .config <<"MCUCONF"\n$configLines\nMCUCONF\n'
           'make olddefconfig >/dev/null && make clean >/dev/null && make -j1';
-      final build = await ssh.run(s, writeConf, timeout: const Duration(minutes: 20));
+      final build = await ssh.run(
+        s,
+        writeConf,
+        timeout: const Duration(minutes: 20),
+      );
       if (!build.success) {
-        throw StepExecutionException('mcu $id build failed', stderr: build.stderr);
+        throw StepExecutionException(
+          'mcu $id build failed',
+          stderr: build.stderr,
+        );
       }
       _log(step, '[mcu] built $id');
 
-      final transport = (raw['transport'] as Map?)?.cast<String, dynamic>() ?? {};
+      final transport =
+          (raw['transport'] as Map?)?.cast<String, dynamic>() ?? {};
       if (transport['requires_physical_access'] == true) {
         await _awaitUserInput('${mcu.id}_physical_prompt', {
           'id': '${mcu.id}_physical_prompt',
           'kind': 'prompt',
-          'message': transport['physical_access_notes'] as String? ?? 'Put the MCU into bootloader mode.',
+          'message':
+              transport['physical_access_notes'] as String? ??
+              'Put the MCU into bootloader mode.',
         });
       }
-      _log(step, '[mcu] $id flash pending — refer to profile firmware/flash-$id.sh');
+      _log(
+        step,
+        '[mcu] $id flash pending — refer to profile firmware/flash-$id.sh',
+      );
     }
   }
 
@@ -442,7 +502,8 @@ class WizardController {
       (o) => o.id == osId,
       orElse: () => throw StepExecutionException('unknown OS option $osId'),
     );
-    final dest = step['dest'] as String? ??
+    final dest =
+        step['dest'] as String? ??
         p.join(Directory.systemTemp.path, 'deckhand-${opt.id}.img');
     _log(step, '[os] downloading ${opt.url} → $dest');
     _log(step, '[os] download dispatch handled by flash-progress UI');
@@ -462,7 +523,10 @@ class WizardController {
       host: host,
       timeout: Duration(seconds: timeoutSecs),
     );
-    if (!ok) throw StepExecutionException('ssh did not come up within $timeoutSecs seconds');
+    if (!ok)
+      throw StepExecutionException(
+        'ssh did not come up within $timeoutSecs seconds',
+      );
     _log(step, '[ssh] up at $host');
   }
 
@@ -477,8 +541,10 @@ class WizardController {
           final contains = v.raw['expect_stdout_contains'] as String?;
           final equals = v.raw['expect_stdout_equals'] as String?;
           var passed = res.success;
-          if (contains != null) passed = passed && res.stdout.contains(contains);
-          if (equals != null) passed = passed && res.stdout.trim() == equals.trim();
+          if (contains != null)
+            passed = passed && res.stdout.contains(contains);
+          if (equals != null)
+            passed = passed && res.stdout.trim() == equals.trim();
           _log(step, '[verify] ${v.id}: ${passed ? "PASS" : "FAIL"}');
           if (!passed && !(v.raw['optional'] as bool? ?? false)) {
             throw StepExecutionException('verifier ${v.id} failed');
@@ -489,10 +555,16 @@ class WizardController {
             _log(step, '[verify] ${v.id}: no host — skipping');
             continue;
           }
-          final url = (v.raw['url'] as String? ?? '').replaceAll('{{host}}', host);
+          final url = (v.raw['url'] as String? ?? '').replaceAll(
+            '{{host}}',
+            host,
+          );
           try {
             final info = await moonraker.info(host: host);
-            _log(step, '[verify] ${v.id}: $url → klippy_state=${info.klippyState}');
+            _log(
+              step,
+              '[verify] ${v.id}: $url → klippy_state=${info.klippyState}',
+            );
           } catch (e) {
             _log(step, '[verify] ${v.id}: $e');
             if (!(v.raw['optional'] as bool? ?? false)) {
@@ -510,13 +582,18 @@ class WizardController {
   Future<void> _runConditional(Map<String, dynamic> step) async {
     final when = step['when'] as String?;
     if (when == null) return;
-    final env = DslEnv(decisions: _state.decisions, profile: _profile?.raw ?? const {});
+    final env = DslEnv(
+      decisions: _state.decisions,
+      profile: _profile?.raw ?? const {},
+    );
     final matches = _dsl.evaluate(when, env);
     if (!matches) {
       _log(step, '[conditional] skipping — condition false');
       return;
     }
-    final thenSteps = ((step['then'] as List?) ?? const []).whereType<Map>().toList();
+    final thenSteps = ((step['then'] as List?) ?? const [])
+        .whereType<Map>()
+        .toList();
     for (final sub in thenSteps) {
       await _runStep(sub.cast<String, dynamic>());
     }
@@ -553,7 +630,8 @@ class WizardController {
       case 'crowsnest':
         return stack.crowsnest;
       default:
-        final choices = ((stack.webui?['choices'] as List?) ?? const []).cast<Map>();
+        final choices = ((stack.webui?['choices'] as List?) ?? const [])
+            .cast<Map>();
         for (final c in choices) {
           if ((c['id'] as String?) == name) return c.cast<String, dynamic>();
         }
@@ -570,23 +648,32 @@ class WizardController {
 
   Future<void> _uploadDir(String localDir, String remote) async {
     final s = _requireSession();
-    final tmpTar = p.join(Directory.systemTemp.path,
-        'deckhand-upload-${DateTime.now().millisecondsSinceEpoch}.tar');
-    final result = await Process.run(
-      'tar',
-      ['-cf', tmpTar, '-C', p.dirname(localDir), p.basename(localDir)],
+    final tmpTar = p.join(
+      Directory.systemTemp.path,
+      'deckhand-upload-${DateTime.now().millisecondsSinceEpoch}.tar',
     );
+    final result = await Process.run('tar', [
+      '-cf',
+      tmpTar,
+      '-C',
+      p.dirname(localDir),
+      p.basename(localDir),
+    ]);
     if (result.exitCode != 0) {
       throw StepExecutionException('local tar failed: ${result.stderr}');
     }
     try {
-      final remoteTar = '/tmp/deckhand-upload-${DateTime.now().millisecondsSinceEpoch}.tar';
+      final remoteTar =
+          '/tmp/deckhand-upload-${DateTime.now().millisecondsSinceEpoch}.tar';
       await ssh.upload(s, tmpTar, remoteTar);
       final extract =
           'mkdir -p "$remote" && tar -xf "$remoteTar" -C "\$(dirname "$remote")" && rm -f "$remoteTar"';
       final res = await ssh.run(s, extract);
       if (!res.success) {
-        throw StepExecutionException('remote extract failed', stderr: res.stderr);
+        throw StepExecutionException(
+          'remote extract failed',
+          stderr: res.stderr,
+        );
       }
     } finally {
       try {
@@ -608,7 +695,8 @@ class WizardController {
       'CONFIG_MCU="$chip"',
       'CONFIG_CLOCK_FREQ=$clock',
       'CONFIG_CLOCK_REF_FREQ=$clockRef',
-      if (flashOffset.isNotEmpty) 'CONFIG_FLASH_APPLICATION_ADDRESS=$flashOffset',
+      if (flashOffset.isNotEmpty)
+        'CONFIG_FLASH_APPLICATION_ADDRESS=$flashOffset',
       'CONFIG_${selectKey.toUpperCase()}=y',
       if (baud != null) 'CONFIG_SERIAL_BAUD=$baud',
     ];
@@ -617,8 +705,21 @@ class WizardController {
 
   bool _isDangerousPath(String path) {
     const dangerous = {
-      '/', '/bin', '/boot', '/etc', '/home', '/lib', '/lib64',
-      '/opt', '/root', '/run', '/sbin', '/srv', '/sys', '/usr', '/var'
+      '/',
+      '/bin',
+      '/boot',
+      '/etc',
+      '/home',
+      '/lib',
+      '/lib64',
+      '/opt',
+      '/root',
+      '/run',
+      '/sbin',
+      '/srv',
+      '/sys',
+      '/usr',
+      '/var',
     };
     return dangerous.contains(path);
   }
@@ -682,11 +783,11 @@ class WizardState {
   });
 
   factory WizardState.initial() => const WizardState(
-        profileId: '',
-        decisions: {},
-        currentStep: 'welcome',
-        flow: WizardFlow.none,
-      );
+    profileId: '',
+    decisions: {},
+    currentStep: 'welcome',
+    flow: WizardFlow.none,
+  );
 
   final String profileId;
   final Map<String, Object> decisions;
@@ -700,14 +801,13 @@ class WizardState {
     String? currentStep,
     WizardFlow? flow,
     String? sshHost,
-  }) =>
-      WizardState(
-        profileId: profileId ?? this.profileId,
-        decisions: decisions ?? this.decisions,
-        currentStep: currentStep ?? this.currentStep,
-        flow: flow ?? this.flow,
-        sshHost: sshHost ?? this.sshHost,
-      );
+  }) => WizardState(
+    profileId: profileId ?? this.profileId,
+    decisions: decisions ?? this.decisions,
+    currentStep: currentStep ?? this.currentStep,
+    flow: flow ?? this.flow,
+    sshHost: sshHost ?? this.sshHost,
+  );
 }
 
 class StepExecutionException implements Exception {
@@ -751,7 +851,11 @@ class StepStarted extends WizardEvent {
 }
 
 class StepProgress extends WizardEvent {
-  const StepProgress({required this.stepId, required this.percent, this.message});
+  const StepProgress({
+    required this.stepId,
+    required this.percent,
+    this.message,
+  });
   final String stepId;
   final double percent;
   final String? message;
