@@ -1,3 +1,5 @@
+import '../models/printer_profile.dart';
+
 /// Fetch + parse printer profiles from the deckhand-builds repo.
 abstract class ProfileService {
   /// Fetch the profile registry (tiny YAML at the repo root).
@@ -48,18 +50,5 @@ class ProfileCacheEntry {
   final String resolvedSha;
 }
 
-/// Parsed profile.yaml. Structure mirrors the schema documented in
-/// deckhand-builds/AUTHORING.md. Full shape will be filled in via freezed
-/// models; placeholder for now.
-class PrinterProfile {
-  const PrinterProfile({
-    required this.raw,
-    required this.id,
-    required this.version,
-    required this.displayName,
-  });
-  final Map<String, dynamic> raw;
-  final String id;
-  final String version;
-  final String displayName;
-}
+// PrinterProfile lives in models/printer_profile.dart and is re-exported
+// from the library entrypoint.

@@ -1,6 +1,10 @@
 // Package rpc implements JSON-RPC 2.0 framing over line-delimited JSON
 // on stdin/stdout. It's the single IPC surface between the Flutter app
 // and the Go sidecar.
+//
+// Handlers can emit progress notifications through the Notifier passed
+// in their context; the UI receives them as JSON-RPC notifications
+// (messages without an id).
 package rpc
 
 import (
@@ -12,9 +16,14 @@ import (
 	"sync"
 )
 
-// Handler handles a single JSON-RPC method call. Return value is
-// JSON-marshaled back to the UI as `result`.
-type Handler func(ctx context.Context, params json.RawMessage) (any, error)
+// Notifier is how handlers push progress notifications back to the UI.
+// Implementations serialize writes to avoid interleaving with responses.
+type Notifier interface {
+	Notify(method string, params any)
+}
+
+// Handler handles a single JSON-RPC method call.
+type Handler func(ctx context.Context, params json.RawMessage, note Notifier) (any, error)
 
 // Server is a JSON-RPC 2.0 server that reads requests one-per-line from
 // stdin and writes responses one-per-line to stdout.
@@ -39,37 +48,25 @@ func (s *Server) Register(method string, h Handler) {
 // the input stream closes.
 func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 1<<16), 1<<24) // up to 16 MB per message
+	scanner.Buffer(make([]byte, 1<<16), 1<<24)
 
-	writer := bufio.NewWriter(out)
-	writerMu := &sync.Mutex{}
-
-	writeResponse := func(msg any) {
-		writerMu.Lock()
-		defer writerMu.Unlock()
-		enc := json.NewEncoder(writer)
-		if err := enc.Encode(msg); err != nil {
-			// best-effort; don't crash the server on encode failures
-			return
-		}
-		_ = writer.Flush()
-	}
+	w := &outputWriter{w: bufio.NewWriter(out)}
 
 	for scanner.Scan() {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		line := append([]byte(nil), scanner.Bytes()...) // copy — buffer reused
+		line := append([]byte(nil), scanner.Bytes()...)
 
 		var req request
 		if err := json.Unmarshal(line, &req); err != nil {
-			writeResponse(errorResponse(nil, codeParseError, "parse error", nil))
+			w.writeResponse(errorResponse(nil, codeParseError, "parse error", nil))
 			continue
 		}
 
 		if req.JSONRPC != "2.0" {
-			writeResponse(errorResponse(req.ID, codeInvalidRequest, "missing or bad jsonrpc version", nil))
+			w.writeResponse(errorResponse(req.ID, codeInvalidRequest, "missing or bad jsonrpc version", nil))
 			continue
 		}
 
@@ -77,24 +74,80 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		h, ok := s.handlers[req.Method]
 		s.mu.RUnlock()
 		if !ok {
-			writeResponse(errorResponse(req.ID, codeMethodNotFound, fmt.Sprintf("unknown method %q", req.Method), nil))
+			w.writeResponse(errorResponse(req.ID, codeMethodNotFound, fmt.Sprintf("unknown method %q", req.Method), nil))
 			continue
 		}
 
-		// Dispatch synchronously for now; parallel dispatch lands when
-		// long-running handlers need it.
-		result, err := h(ctx, req.Params)
-		if err != nil {
-			writeResponse(errorResponse(req.ID, codeInternalError, err.Error(), nil))
-			continue
-		}
-		writeResponse(successResponse(req.ID, result))
+		// Dispatch in a goroutine so long-running handlers don't block
+		// the read loop. Each request gets its own notifier that scopes
+		// notifications to its operation id.
+		go func(req request, h Handler) {
+			opID := unquoteID(req.ID)
+			note := &methodNotifier{writer: w, operationID: opID}
+			defer func() {
+				if r := recover(); r != nil {
+					w.writeResponse(errorResponse(req.ID, codeInternalError, fmt.Sprintf("handler panic: %v", r), nil))
+				}
+			}()
+			result, err := h(ctx, req.Params, note)
+			if err != nil {
+				w.writeResponse(errorResponse(req.ID, codeInternalError, err.Error(), nil))
+				return
+			}
+			w.writeResponse(successResponse(req.ID, result))
+		}(req, h)
 	}
 	return scanner.Err()
 }
 
 // -------------------------------------------------------------------
-// message types + error codes
+// Notifier plumbing
+
+type methodNotifier struct {
+	writer      *outputWriter
+	operationID string
+}
+
+func (n *methodNotifier) Notify(method string, params any) {
+	p, err := json.Marshal(params)
+	if err != nil {
+		return
+	}
+	// Inject the operation id so the UI can correlate notifications to
+	// the originating request.
+	var merged map[string]any
+	if err := json.Unmarshal(p, &merged); err == nil {
+		merged["operation_id"] = n.operationID
+		p, _ = json.Marshal(merged)
+	}
+	n.writer.writeRaw(notification{
+		JSONRPC: "2.0",
+		Method:  method,
+		Params:  p,
+	})
+}
+
+type outputWriter struct {
+	mu sync.Mutex
+	w  *bufio.Writer
+}
+
+func (o *outputWriter) writeResponse(r response) {
+	o.writeRaw(r)
+}
+
+func (o *outputWriter) writeRaw(v any) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	enc := json.NewEncoder(o.w)
+	if err := enc.Encode(v); err != nil {
+		return
+	}
+	_ = o.w.Flush()
+}
+
+// -------------------------------------------------------------------
+// Message types + error codes
 
 type request struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -110,22 +163,47 @@ type response struct {
 	Error   *responseError  `json:"error,omitempty"`
 }
 
+type notification struct {
+	JSONRPC string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
 type responseError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 }
 
+// Error codes, grouped by domain per docs/ARCHITECTURE.md.
 const (
 	codeParseError     = -32700
 	codeInvalidRequest = -32600
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
 	codeInternalError  = -32603
+
+	CodeGeneric = -32000
+	CodeSSH     = -33000
+	CodeDisk    = -34000
+	CodeProfile = -35000
+	CodeNetwork = -36000
 )
 
 func successResponse(id json.RawMessage, result any) response {
 	return response{JSONRPC: "2.0", ID: id, Result: result}
+}
+
+// unquoteID strips JSON quotes off a raw-encoded id so it can be used as
+// a plain string in notifications. Numeric ids are returned as-is.
+func unquoteID(id json.RawMessage) string {
+	if len(id) >= 2 && id[0] == '"' && id[len(id)-1] == '"' {
+		var s string
+		if err := json.Unmarshal(id, &s); err == nil {
+			return s
+		}
+	}
+	return string(id)
 }
 
 func errorResponse(id json.RawMessage, code int, msg string, data any) response {

@@ -1,14 +1,9 @@
-// Package disks implements platform-specific disk enumeration and
-// image read/write. Actual implementations land per-OS:
-//
-//   - disks_windows.go — \\.\PHYSICALDRIVE*, CreateFile, DeviceIoControl
-//   - disks_linux.go   — /dev/sd*, /sys/block, ioctl
-//   - disks_darwin.go  — /dev/diskN, diskutil, DiskArbitration
+// Package disks handles local disk enumeration, image reads (backups),
+// and image writes (flashes). Writes route through the elevated helper
+// binary — the sidecar itself never runs with elevation.
 package disks
 
-import "context"
-
-// DiskInfo matches the JSON shape returned by `disks.list`.
+// DiskInfo is the JSON-serializable shape returned by `disks.list`.
 type DiskInfo struct {
 	ID         string      `json:"id"`
 	Path       string      `json:"path"`
@@ -19,26 +14,10 @@ type DiskInfo struct {
 	Partitions []Partition `json:"partitions"`
 }
 
+// Partition is one partition on a DiskInfo.
 type Partition struct {
 	Index      int    `json:"index"`
-	Filesystem string `json:"filesystem"`
+	Filesystem string `json:"filesystem,omitempty"`
 	SizeBytes  int64  `json:"size_bytes"`
 	Mountpoint string `json:"mountpoint,omitempty"`
-}
-
-// List enumerates local disks. Implemented per-platform; this stub keeps
-// the package buildable cross-platform until the OS-specific files land.
-func List(ctx context.Context) ([]DiskInfo, error) {
-	return nil, errNotImplemented
-}
-
-// WriteImage streams bytes from [imagePath] onto the disk [diskID].
-// Requires the `deckhand-elevated-helper` binary for actual writes.
-func WriteImage(ctx context.Context, imagePath, diskID, confirmationToken string) error {
-	return errNotImplemented
-}
-
-// ReadImage dds [diskID] into [outputPath].
-func ReadImage(ctx context.Context, diskID, outputPath string) error {
-	return errNotImplemented
 }

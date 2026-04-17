@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   deckhand_core:
     path: ../deckhand_core
+  deckhand_flash:
+    path: ../deckhand_flash
   dio: ^5.9.1
   yaml: ^3.1.0
   path: ^1.9.0
