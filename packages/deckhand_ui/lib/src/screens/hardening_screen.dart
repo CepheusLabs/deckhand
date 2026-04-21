@@ -44,13 +44,23 @@ class _HardeningScreenState extends ConsumerState<HardeningScreen> {
         children: [
           _toggle(
             'fix_timesync',
-            'Fix time-sync conflict (keep chrony only)',
-            'Disables redundant ntp + chronyd units.',
+            'Fix time-sync conflict',
+            'The stock image runs two clock-sync daemons at once '
+                '(chrony + systemd-timesyncd), which fight each other, and '
+                'points them at NTP pools that can be unreachable outside '
+                'China. Enabling this disables timesyncd so chrony is the '
+                'sole owner of the clock, and switches its pool to '
+                'pool.ntp.org. Fixes the "clock jumps on boot" behavior '
+                'some users see.',
           ),
           _toggle(
             'change_password',
             'Change default mks SSH password',
-            'Required on any printer exposed to an untrusted network.',
+            'The default `mks` / `makerbase` credentials are documented '
+                'publicly and identical on every unit out of the box. '
+                'Strongly recommended before exposing the printer to any '
+                'network you don\'t fully trust (LAN with guests, shared '
+                'IoT VLAN, etc.).',
           ),
           if (_enabled['change_password'] == true) ...[
             const SizedBox(height: 12),

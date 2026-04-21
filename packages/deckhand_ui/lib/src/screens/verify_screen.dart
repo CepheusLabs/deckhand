@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers.dart';
+import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -11,41 +12,45 @@ class VerifyScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Simplified - a real implementation runs each of the profile's
-    // stock_os.detections over SSH and shows per-check pass/fail. For
-    // now we present a checklist view keyed off profile detection rules
-    // and let the user acknowledge.
+    final theme = Theme.of(context);
     final controller = ref.watch(wizardControllerProvider);
     final profile = controller.profile;
     final detections = profile?.stockOs.detections ?? const [];
 
     return WizardScaffold(
       stepper: const DeckhandStepper(),
-      title: 'Verify your printer',
+      title: 'Does this look like your printer?',
       helperText:
-          'We\'ll run a few quick checks against your connected printer to '
-          'confirm this profile matches. Warnings don\'t block the wizard - '
-          'you can always proceed.',
+          'A few quick sanity checks so we can confirm the profile you '
+          'picked matches what\'s actually on this machine. Required '
+          'checks need to match for the flow to work. Optional ones are '
+          'hints that we\'re talking to the right kind of printer.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final d in detections) ...[
-            ListTile(
-              leading: Icon(
-                d.required ? Icons.check_circle_outline : Icons.help_outline,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              title: Text('${d.kind}: ${_pathFor(d.raw)}'),
-              subtitle: Text(d.required ? 'required' : 'optional'),
-              dense: true,
-            ),
-          ],
           if (detections.isEmpty)
-            const Text('No detection rules declared for this profile.'),
+            const Text('No detection rules declared for this profile.')
+          else
+            for (final d in detections)
+              Card(
+                child: ListTile(
+                  leading: Icon(
+                    d.required
+                        ? Icons.check_circle_outline
+                        : Icons.info_outline,
+                    color: d.required
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  title: Text(_title(d.kind, d.raw, profile?.manufacturer)),
+                  subtitle: Text(_explain(d.kind, d.raw, d.required)),
+                  isThreeLine: true,
+                ),
+              ),
         ],
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: 'Looks right, continue',
         onPressed: () => context.go('/choose-path'),
       ),
       secondaryActions: [
@@ -54,10 +59,49 @@ class VerifyScreen extends ConsumerWidget {
     );
   }
 
-  String _pathFor(Map<String, dynamic> raw) {
-    return raw['path'] as String? ??
-        raw['name'] as String? ??
-        raw['unit'] as String? ??
-        '?';
+  /// Human-facing title for a detection. Prefers the profile author's
+  /// custom `label` field if present, otherwise falls back to a generic
+  /// sentence keyed by detection `kind`.
+  String _title(String kind, Map<String, dynamic> raw, String? vendor) {
+    final custom = raw['label'] as String?;
+    if (custom != null && custom.trim().isNotEmpty) return custom.trim();
+
+    switch (kind) {
+      case 'file_exists':
+        return 'A vendor file we expect to see is present';
+      case 'file_contains':
+        final pattern = raw['pattern'] as String? ?? '';
+        return pattern.isEmpty
+            ? 'A file contains an expected marker'
+            : 'A file mentions "$pattern"';
+      case 'process_running':
+        final name = raw['name'] as String? ?? '';
+        return name.isEmpty
+            ? '${vendor ?? "Vendor"} service is running'
+            : '"$name" is running';
+      case 'process_pattern':
+        return 'A vendor process is running';
+      default:
+        return 'Custom check';
+    }
+  }
+
+  /// Secondary line - the "how we check it" detail plus any note from
+  /// the profile, kept out of the title so non-technical users aren\'t
+  /// confronted with a filesystem path first.
+  String _explain(String kind, Map<String, dynamic> raw, bool required) {
+    final note = flattenProfileText(raw['note'] as String?);
+    final label = required ? 'Needs to be present' : 'Optional hint';
+    final detail = switch (kind) {
+      'file_exists' => 'Checks: ${raw['path']}',
+      'file_contains' =>
+        'Checks: ${raw['path']} contains "${raw['pattern']}"',
+      'process_running' => 'Checks: process "${raw['name']}"',
+      _ => raw.toString(),
+    };
+    return [
+      '$label - $detail',
+      if (note.isNotEmpty) note,
+    ].join('\n');
   }
 }

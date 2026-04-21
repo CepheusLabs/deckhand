@@ -101,14 +101,27 @@ class SidecarProfileService implements ProfileService {
     final resolvedRef = ref ?? 'main';
     final dest = p.join(paths.cacheDir, 'profiles', resolvedRef);
 
-    // If already present and not forced, reuse it.
+    // Semver-tagged refs (v1.2.3, v26.4.18-1247) are immutable - a tag
+    // pointing at a given commit never moves, so caching by ref name is
+    // safe. Branch refs like `main` ARE mutable; caching them by name
+    // causes users to see whatever snapshot was pulled first, forever.
+    // Invalidate those before every fetch.
+    final isImmutableRef = _looksLikeTag(resolvedRef);
     if (await Directory(dest).exists()) {
-      return ProfileCacheEntry(
-        profileId: profileId,
-        ref: resolvedRef,
-        localPath: p.join(dest, 'printers', profileId),
-        resolvedSha: '',
-      );
+      if (isImmutableRef) {
+        return ProfileCacheEntry(
+          profileId: profileId,
+          ref: resolvedRef,
+          localPath: p.join(dest, 'printers', profileId),
+          resolvedSha: '',
+        );
+      }
+      try {
+        await Directory(dest).delete(recursive: true);
+      } catch (_) {
+        // Best-effort - if the directory is locked, the sidecar clone
+        // will fail anyway and surface a clearer error.
+      }
     }
 
     final res = await sidecar.call('profiles.fetch', {
@@ -123,6 +136,12 @@ class SidecarProfileService implements ProfileService {
       resolvedSha: res['resolved_sha'] as String? ?? '',
     );
   }
+
+  /// A ref matches this pattern when it looks like a semver-y tag
+  /// (`v1.2.3`, `v26.4.18-1247`, `1.0.0`). Anything else is treated as a
+  /// mutable branch/HEAD-like reference and cached accordingly.
+  static final _tagLike = RegExp(r'^v?\d+\.\d+\.\d+(-[\w.-]+)?$');
+  bool _looksLikeTag(String ref) => _tagLike.hasMatch(ref);
 
   @override
   Future<PrinterProfile> load(ProfileCacheEntry cacheEntry) async {

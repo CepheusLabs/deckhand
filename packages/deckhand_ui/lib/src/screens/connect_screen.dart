@@ -23,6 +23,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 
   bool _scanning = false;
   List<DiscoveredPrinter> _discovered = const [];
+  // Keyed by host. Populated after each discovered IP is probed on
+  // /printer/info - confirms it's actually Moonraker and gives us the
+  // hostname + Klipper state to show on the card.
+  final Map<String, KlippyInfo> _enriched = {};
 
   @override
   void initState() {
@@ -65,25 +69,53 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     ];
 
     final merged = <String, DiscoveredPrinter>{};
+    _enriched.clear();
     // As each probe finishes, fold its results in and update the UI so the
     // user sees printers appearing progressively instead of waiting for
-    // the slowest scan.
+    // the slowest scan. Each newly-found host then gets an /printer/info
+    // GET against Moonraker to upgrade the "moonraker?" guess into
+    // confirmed info (hostname, Klipper version, state).
     var outstanding = futures.length;
     for (final f in futures) {
       f.then((found) {
+        final newlySeen = <DiscoveredPrinter>[];
         for (final p in found) {
-          merged.putIfAbsent(p.host, () => p);
+          if (merged.putIfAbsent(p.host, () => p) == p) newlySeen.add(p);
         }
         if (!mounted) return;
         setState(() {
           _discovered = merged.values.toList();
         });
+        for (final p in newlySeen) {
+          _enrich(p);
+        }
       }).whenComplete(() {
         outstanding--;
         if (outstanding == 0 && mounted) {
           setState(() => _scanning = false);
         }
       });
+    }
+  }
+
+  /// Confirm a discovered host actually speaks Moonraker by hitting the
+  /// unauthenticated `/printer/info` endpoint. On success, stash the
+  /// returned info so the card can render real data (hostname, Klipper
+  /// version, state) instead of a generic "moonraker?" guess. Failures
+  /// are silent; the card just keeps showing the IP.
+  Future<void> _enrich(DiscoveredPrinter p) async {
+    try {
+      final info = await ref
+          .read(moonrakerServiceProvider)
+          .info(host: p.host, port: p.port);
+      if (!mounted) return;
+      setState(() {
+        _enriched[p.host] = info;
+      });
+    } catch (_) {
+      // Port was open but the service isn't Moonraker, or auth blocks
+      // anonymous GETs. Either way, leave the card as the raw discovery
+      // result so the user still sees the IP.
     }
   }
 
@@ -179,6 +211,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 for (final p in _discovered)
                   _DiscoveredCard(
                     printer: p,
+                    info: _enriched[p.host],
                     onTap: _connecting ? null : () => _connect(p.host),
                   ),
               ],
@@ -233,15 +266,49 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 }
 
 class _DiscoveredCard extends StatelessWidget {
-  const _DiscoveredCard({required this.printer, required this.onTap});
+  const _DiscoveredCard({
+    required this.printer,
+    required this.onTap,
+    this.info,
+  });
   final DiscoveredPrinter printer;
+  final KlippyInfo? info;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final enriched = info;
+
+    // Title: prefer Moonraker-reported hostname, then mDNS hostname,
+    // then raw IP. Identifying the machine by name is a lot easier
+    // than scanning a list of IPs.
+    final title =
+        (enriched != null && enriched.hostname.trim().isNotEmpty)
+        ? enriched.hostname
+        : (printer.hostname.isNotEmpty && printer.hostname != printer.host
+              ? printer.hostname
+              : printer.host);
+
+    // Second line: Klipper software version if we got it, otherwise
+    // the discovery-source guess. `moonraker?` stops showing as soon
+    // as enrichment confirms it.
+    final String detail;
+    if (enriched != null) {
+      final version = enriched.softwareVersion.trim();
+      detail = version.isEmpty
+          ? '${printer.host}:${printer.port} · Moonraker'
+          : '${printer.host} · $version';
+    } else {
+      detail = '${printer.host}:${printer.port} · ${printer.service}';
+    }
+
+    final stateChip = enriched == null
+        ? null
+        : _StateChip(state: enriched.klippyState);
+
     return SizedBox(
-      width: 280,
+      width: 320,
       child: Card(
         child: InkWell(
           onTap: onTap,
@@ -257,23 +324,54 @@ class _DiscoveredCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        printer.hostname.isEmpty
-                            ? printer.host
-                            : printer.hostname,
+                        title,
                         style: theme.textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (stateChip != null) stateChip,
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${printer.host}:${printer.port} · ${printer.service}',
+                  detail,
                   style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StateChip extends StatelessWidget {
+  const _StateChip({required this.state});
+  final String state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final normalized = state.toLowerCase();
+    final color = switch (normalized) {
+      'ready' || 'printing' => theme.colorScheme.tertiary,
+      'startup' || 'shutdown' => theme.colorScheme.secondary,
+      'error' || 'disconnected' => theme.colorScheme.error,
+      _ => theme.colorScheme.outline,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        normalized,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
