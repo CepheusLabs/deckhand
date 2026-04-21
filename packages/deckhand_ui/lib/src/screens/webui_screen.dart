@@ -29,7 +29,7 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
       stepper: const DeckhandStepper(),
       title: 'Which web interface?',
       helperText:
-          'Both Mainsail and Fluidd talk to Moonraker — pick one, the other, '
+          'Both Mainsail and Fluidd talk to Moonraker - pick one, the other, '
           'or install both and switch per session. Neither is a power-user '
           'option: Moonraker is still installed; you can add a UI later.',
       body: Column(
@@ -50,7 +50,7 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
                 raw['display_name'] as String? ?? raw['id'] as String,
               ),
               subtitle: Text(
-                '${raw['release_repo']} — port ${raw['default_port']}',
+                '${raw['release_repo']} - port ${raw['default_port']}',
               ),
             ),
         ],

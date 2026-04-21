@@ -1,4 +1,4 @@
-# Sidecar IPC — JSON-RPC 2.0 method catalog
+# Sidecar IPC - JSON-RPC 2.0 method catalog
 
 > The Deckhand Flutter UI spawns the Go sidecar (`deckhand-sidecar`) as a
 > child process and talks to it via JSON-RPC 2.0 over stdin/stdout. One
@@ -40,7 +40,7 @@ Error code ranges:
 
 ### Notifications (sidecar → UI only)
 
-Sidecar-emitted progress messages — no `id`. All notifications include
+Sidecar-emitted progress messages - no `id`. All notifications include
 `operation_id` in params so the UI can route the update to the request
 that spawned it.
 
@@ -115,10 +115,10 @@ dd a disk into a file (for backups). Emits `progress` notifications.
 
 #### `disks.write_image`
 Write an image to a disk. In the main sidecar this **always returns an
-error** — the UI must dispatch via the elevated helper binary
+error** - the UI must dispatch via the elevated helper binary
 (`deckhand-elevated-helper`) which performs the actual write.
 - **Params**: `{ image_path: str, disk_id: str, confirmation_token: str }`
-- **Result**: — (always errors with "elevation required")
+- **Result**: - (always errors with "elevation required")
 
 ---
 
@@ -149,7 +149,7 @@ Shallow-clone (`depth=1`) a profile repo at a ref via go-git.
 
 ## Elevated helper (separate binary)
 
-`deckhand-elevated-helper` is **not** a JSON-RPC peer — it's a single-op
+`deckhand-elevated-helper` is **not** a JSON-RPC peer - it's a single-op
 Go binary the UI launches with platform-native elevation (UAC /
 AuthorizationExecuteWithPrivileges / pkexec).
 
@@ -178,10 +178,10 @@ On failure: `{"event":"error","message":"..."}` then exit non-zero.
 ## Framing implementation notes
 
 - Each JSON message is on a single line; messages are split on `\n`.
-- Max line length: 16 MiB. Longer messages (which shouldn't happen —
+- Max line length: 16 MiB. Longer messages (which shouldn't happen -
   binary payloads go through file paths, not JSON) will be rejected by
   the sidecar scanner.
 - Responses for different requests may arrive out of order; the UI
   correlates via `id`.
-- Handlers run in their own goroutines — multiple long-running ops can
+- Handlers run in their own goroutines - multiple long-running ops can
   progress concurrently.

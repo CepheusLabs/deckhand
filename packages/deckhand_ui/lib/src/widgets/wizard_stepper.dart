@@ -26,28 +26,58 @@ class WizardStepper extends StatelessWidget {
           bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < steps.length; i++) ...[
-              _StepDot(
-                label: steps[i].label,
-                state: _stateFor(i),
-                onTap: i < currentIndex ? () => onStepTap(i) : null,
-              ),
-              if (i < steps.length - 1)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: theme.colorScheme.outline,
-                    size: 18,
-                  ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final content = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < steps.length; i++) ...[
+                _StepDot(
+                  label: steps[i].label,
+                  state: _stateFor(i),
+                  onTap: i < currentIndex ? () => onStepTap(i) : null,
                 ),
+                if (i < steps.length - 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(
+                      Icons.chevron_right,
+                      color: theme.colorScheme.outline,
+                      size: 18,
+                    ),
+                  ),
+              ],
             ],
-          ],
-        ),
+          );
+
+          // Center the Row when it fits; fall back to a horizontal
+          // scroller when the window is too narrow to show every step.
+          // The fade mask signals that there's more to scroll to when
+          // the content overflows.
+          final surfaceColor = theme.colorScheme.surfaceContainerHighest;
+          return ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              stops: const [0, 0.04, 0.96, 1],
+              colors: [
+                surfaceColor,
+                Colors.white,
+                Colors.white,
+                surfaceColor,
+              ],
+            ).createShader(bounds),
+            blendMode: BlendMode.dstIn,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: Center(child: content),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -48,7 +48,7 @@ class DslEvaluator {
 
 typedef DslPredicate = bool Function(List<Object?> args, DslEnv env);
 
-/// Evaluation context — wizard decisions so far, plus callbacks for
+/// Evaluation context - wizard decisions so far, plus callbacks for
 /// predicates that need to run side-effectful probes.
 class DslEnv {
   DslEnv({required this.decisions, required this.profile, this.probes});

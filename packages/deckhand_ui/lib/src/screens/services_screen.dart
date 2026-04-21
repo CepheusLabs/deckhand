@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers.dart';
+import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -81,11 +82,27 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             const SizedBox(height: 16),
-            for (final opt in options)
-              RadioListTile<String>(
-                value: opt['id'] as String,
-                title: Text(opt['label'] as String? ?? opt['id'] as String),
+            for (final opt in options) ...[
+              Builder(
+                builder: (_) {
+                  final desc = opt['description'] as String?;
+                  final rendered = desc == null
+                      ? null
+                      : flattenProfileText(desc);
+                  return RadioListTile<String>(
+                    value: opt['id'] as String,
+                    title: Text(
+                      opt['label'] as String? ?? opt['id'] as String,
+                    ),
+                    subtitle: rendered == null || rendered.isEmpty
+                        ? null
+                        : Text(rendered),
+                    isThreeLine:
+                        rendered != null && rendered.length > 60,
+                  );
+                },
               ),
+            ],
           ],
         ),
       ),

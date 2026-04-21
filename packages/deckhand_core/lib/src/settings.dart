@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 /// User preferences persisted to `settings.json` in Deckhand's data dir.
-/// Schema is intentionally loose (JSON-backed) — we'll tighten as
+/// Schema is intentionally loose (JSON-backed) - we'll tighten as
 /// real settings land.
 class DeckhandSettings {
   DeckhandSettings({required this.path, Map<String, dynamic>? initial})

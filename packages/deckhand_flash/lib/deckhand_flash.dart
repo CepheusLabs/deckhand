@@ -1,4 +1,4 @@
-/// Deckhand flash — sidecar-backed [FlashService], [SecurityService],
+/// Deckhand flash - sidecar-backed [FlashService], [SecurityService],
 /// and [UpstreamService] for the desktop app.
 library deckhand_flash;
 

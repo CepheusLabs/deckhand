@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 
 import 'sidecar_client.dart';
 
-/// [UpstreamService] — git clones via the sidecar, release assets over
+/// [UpstreamService] - git clones via the sidecar, release assets over
 /// HTTPS using Dio + GitHub's Releases API.
 class SidecarUpstreamService implements UpstreamService {
   SidecarUpstreamService({required this.sidecar, Dio? dio})

@@ -2,7 +2,7 @@ import 'package:deckhand_core/deckhand_core.dart';
 import 'package:dio/dio.dart';
 
 /// [MoonrakerService] using HTTP against Moonraker's REST API. We only
-/// need two endpoints (info + print_stats), both available over REST —
+/// need two endpoints (info + print_stats), both available over REST -
 /// no WebSocket needed.
 class MoonrakerHttpService implements MoonrakerService {
   MoonrakerHttpService({Dio? dio})
@@ -45,5 +45,5 @@ class MoonrakerHttpService implements MoonrakerService {
   }
 }
 
-/// Backwards-compat alias — same service, HTTP-backed today.
+/// Backwards-compat alias - same service, HTTP-backed today.
 typedef MoonrakerWsService = MoonrakerHttpService;

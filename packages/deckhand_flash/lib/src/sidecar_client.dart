@@ -159,7 +159,7 @@ class SidecarClient {
     try {
       await call('shutdown', const {}).timeout(const Duration(seconds: 2));
     } catch (_) {
-      // ignore — we're shutting down anyway
+      // ignore - we're shutting down anyway
     }
     _process?.kill();
     await _stdoutSub?.cancel();

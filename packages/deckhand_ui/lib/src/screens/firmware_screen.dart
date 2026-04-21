@@ -30,7 +30,7 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
       helperText:
           'Kalico is a community-maintained Klipper fork with weekly '
           'rebases and some helpful extras (gcode_shell_command, danger_'
-          'options). Mainline Klipper is upstream/master — more conservative.',
+          'options). Mainline Klipper is upstream/master - more conservative.',
       body: RadioGroup<String>(
         groupValue: _choice,
         onChanged: (v) => setState(() => _choice = v),
@@ -59,8 +59,8 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
                     ],
                   ),
                   subtitle: Text(
-                    '${c.description ?? ''}\n${c.repo} @ ${c.ref}',
-                    maxLines: 3,
+                    '${_flatten(c.description)}\n${c.repo} @ ${c.ref}',
+                    maxLines: 4,
                   ),
                 ),
               ),
@@ -85,5 +85,19 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
         ),
       ],
     );
+  }
+
+  // Profile descriptions are often authored as YAML literal blocks
+  // (`|`) with hard line breaks at ~80 chars for source readability.
+  // Those baked-in newlines render verbatim on wider screens. Collapse
+  // single newlines into spaces while preserving paragraph breaks.
+  String _flatten(String? text) {
+    if (text == null || text.isEmpty) return '';
+    return text
+        .replaceAll('\r\n', '\n')
+        .replaceAll(RegExp(r'\n{2,}'), '\u0000')
+        .replaceAll('\n', ' ')
+        .replaceAll('\u0000', '\n\n')
+        .trim();
   }
 }

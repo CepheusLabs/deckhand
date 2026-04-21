@@ -22,7 +22,7 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
     final kiauh = profile?.stack.kiauh ?? const <String, dynamic>{};
     final explainer =
         ((kiauh['wizard'] as Map?)?['explainer'] as String?) ??
-        'KIAUH is the Klipper Installation And Update Helper — an interactive '
+        'KIAUH is the Klipper Installation And Update Helper - an interactive '
             'SSH menu for maintaining your stack after Deckhand finishes.';
     final examples =
         ((kiauh['wizard'] as Map?)?['examples'] as List?)?.cast<String>() ??
@@ -53,7 +53,7 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
             ),
             const RadioListTile<bool>(
               value: false,
-              title: Text('Skip — I\'ll install it later if I want'),
+              title: Text('Skip - I\'ll install it later if I want'),
             ),
           ],
         ),

@@ -63,7 +63,7 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
           stepper: const DeckhandStepper(),
           title: 'Which printer are you setting up?',
           helperText:
-              'Deckhand supports these printers. Pick yours — we use that '
+              'Deckhand supports these printers. Pick yours - we use that '
               'choice to load the right profile before anything else.',
           body: body,
           primaryAction: WizardAction(

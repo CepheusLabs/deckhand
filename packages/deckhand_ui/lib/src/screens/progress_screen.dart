@@ -50,11 +50,11 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
         case StepCompleted(:final stepId):
           _log.add('✓ $stepId');
         case StepFailed(:final stepId, :final error):
-          _log.add('✗ $stepId — $error');
+          _log.add('✗ $stepId - $error');
         case StepLog(:final line):
           _log.add(line);
         case StepWarning(:final stepId, :final message):
-          _log.add('! $stepId — $message');
+          _log.add('! $stepId - $message');
         case _:
           break;
       }

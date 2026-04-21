@@ -1,4 +1,4 @@
-# Deckhand — Architecture
+# Deckhand - Architecture
 
 > Deckhand is a cross-platform desktop app (Flutter UI + Go sidecar) that
 > flashes, sets up, and maintains Klipper-based 3D printers.
@@ -20,7 +20,7 @@
    GoRouter, Freezed + json_serializable, Dio, `flutter_secure_storage`,
    Slang i18n, Material 3.
 5. **No hosted backend.** The app runs fully local; the only network
-   traffic is direct — to the user's printer on LAN and to public upstream
+   traffic is direct - to the user's printer on LAN and to public upstream
    sources (GitHub, Armbian) for downloads.
 6. **Non-technical users welcome.** Wizard screens are the default path.
    Technical users can drop into YAML authoring and CLI mode.
@@ -103,7 +103,7 @@ deckhand/
 │   │       └── src/
 │   │           ├── mdns.dart            # bonsoir / nsd
 │   │           └── cidr_scan.dart
-│   ├── deckhand_ui/                     # Flutter widgets — wizard screens
+│   ├── deckhand_ui/                     # Flutter widgets - wizard screens
 │   │   └── lib/
 │   │       └── src/
 │   │           ├── screens/             # wizard screens
@@ -131,7 +131,7 @@ deckhand/
 ## Package boundaries and dependencies
 
 ```
-deckhand_core              (no deckhand_* deps — pure Dart)
+deckhand_core              (no deckhand_* deps - pure Dart)
     ▲
     │
 deckhand_profile_script  ← (pure Dart, consumed only by profile authors)
@@ -152,9 +152,9 @@ External deps:
 - `go_router ^14.0.0`
 - `flutter_secure_storage ^10.0.0`
 - `slang ^4.0.0`
-- `dartssh2` — SSH
-- `bonsoir` or `nsd` — mDNS
-- `yaml ^3.x` — profile parsing
+- `dartssh2` - SSH
+- `bonsoir` or `nsd` - mDNS
+- `yaml ^3.x` - profile parsing
 - `uuid ^4.0.0`
 - `path ^1.9.0`
 - `path_provider ^2.1.0`
@@ -164,7 +164,7 @@ External deps:
 
 Every privileged / host-specific capability is an abstract class in
 `deckhand_core`. Concrete implementations live in their own package under
-`packages/`. Wiring happens at app startup via Riverpod overrides — so
+`packages/`. Wiring happens at app startup via Riverpod overrides - so
 tests can inject fakes and production wires in real implementations
 without any code in `deckhand_core` caring about the difference.
 
@@ -222,19 +222,19 @@ testWidgets('flash flow reports progress', (tester) async {
 
 The sidecar is a small Go binary that Deckhand spawns as a
 child process at launch. It exists because Dart can't do elevated disk I/O
-portably — Go has better primitives and cross-compiles trivially.
+portably - Go has better primitives and cross-compiles trivially.
 
 **IPC**: JSON-RPC 2.0 over stdin/stdout, newline-delimited.
 
 **Scope**: only the operations Dart can't do well.
 
-- `disks.list` — enumerate local disks (USB, internal, sizes, partitions)
-- `disks.read_image` — dd a disk to an image file (for backups)
-- `disks.write_image` — dd an image to a disk (for fresh-flash flows)
-- `disks.hash` — streaming sha256 of a file
-- `os.download` — HTTP fetch with progress + sha256 verify
-- `profiles.fetch` — git shallow-clone a profile repo ref via go-git
-- `host.info` — OS / arch / data dirs
+- `disks.list` - enumerate local disks (USB, internal, sizes, partitions)
+- `disks.read_image` - dd a disk to an image file (for backups)
+- `disks.write_image` - dd an image to a disk (for fresh-flash flows)
+- `disks.hash` - streaming sha256 of a file
+- `os.download` - HTTP fetch with progress + sha256 verify
+- `profiles.fetch` - git shallow-clone a profile repo ref via go-git
+- `host.info` - OS / arch / data dirs
 - Lifecycle: `ping`, `shutdown`, `version.compat`
 
 **Not in scope** (Dart handles these):
@@ -252,7 +252,7 @@ separate small helper binary:
 
 - **Helper binary**: `deckhand-elevated-helper` (Go, single file). Ships
   alongside the main sidecar. No persistent state, no network access
-  (enforced in the build), no stdin — takes arguments on the command line
+  (enforced in the build), no stdin - takes arguments on the command line
   and writes progress to stdout.
 - **Invocation**: when the sidecar needs an elevated op, it requests
   elevation from Flutter, which launches the helper with the user's OS
@@ -353,17 +353,17 @@ Sidecar is bundled alongside the app binary. On install:
 
 ## Security model
 
-- **Destructive-op confirmation tokens** — sidecar methods like
+- **Destructive-op confirmation tokens** - sidecar methods like
   `disks.write_image` require a `confirmation_token` issued by a UI-only
   dialog, single-use, 60s TTL.
-- **SSH host key pinning** — first-connection prompt, stored fingerprint in
+- **SSH host key pinning** - first-connection prompt, stored fingerprint in
   `state/known_hosts.json`.
-- **Profile integrity** — tagged profile checkouts are immutable once
+- **Profile integrity** - tagged profile checkouts are immutable once
   published; Deckhand records the resolved commit SHA in each operation log.
-- **No unauthenticated code execution** — scripts from profiles are executed
+- **No unauthenticated code execution** - scripts from profiles are executed
   only with explicit user consent in the UI, with their source hash
   displayed.
-- **Network allow-list (strict by default)** — Deckhand ships with an empty
+- **Network allow-list (strict by default)** - Deckhand ships with an empty
   host allow-list. Any outbound connection (GitHub, Armbian mirror, the
   printer's IP, etc.) triggers a one-time "Allow this host?" prompt in the
   UI showing the URL + the operation that requested it. Approvals persist
@@ -385,32 +385,32 @@ Flutter path on this dev machine: `D:\git\flutter\bin\flutter.bat`.
 
 ## Testing strategy
 
-- **Dart unit tests** — `flutter test` per package. High coverage for
+- **Dart unit tests** - `flutter test` per package. High coverage for
   `deckhand_core` (pure logic) and serializers.
-- **Sidecar unit tests** — Go table-driven tests for each handler.
-- **Integration tests** — Dart `integration_test` hitting a real sidecar
+- **Sidecar unit tests** - Go table-driven tests for each handler.
+- **Integration tests** - Dart `integration_test` hitting a real sidecar
   (via spawn) for end-to-end flows.
-- **Profile validation** — YAML lint + schema validation in CI on
+- **Profile validation** - YAML lint + schema validation in CI on
   deckhand-builds (separate repo, invoked via its own CI).
-- **Hardware-in-the-loop** — manual, per-release. Document protocol in
+- **Hardware-in-the-loop** - manual, per-release. Document protocol in
   `RELEASING.md`.
 
 ## Decided
 
-1. **License** — AGPL-3.0 for both `deckhand` and `deckhand-builds`.
-2. **i18n** — Slang wired from day one, English-only strings at v1,
+1. **License** - AGPL-3.0 for both `deckhand` and `deckhand-builds`.
+2. **i18n** - Slang wired from day one, English-only strings at v1,
    additional locales added incrementally.
-3. **SSH library** — `dartssh2`.
-4. **Elevation model** — separate `deckhand-elevated-helper` binary for
+3. **SSH library** - `dartssh2`.
+4. **Elevation model** - separate `deckhand-elevated-helper` binary for
    flash ops; sidecar stays unprivileged.
-5. **Network policy** — strict allow-list, empty by default, profile-declared
+5. **Network policy** - strict allow-list, empty by default, profile-declared
    hosts batch-approved at wizard start.
 
 ## Open decisions (non-blocking)
 
-1. **Auto-update** — Deckhand self-update vs. rely on OS package managers.
-2. **Crash reporting** — local-only log collection vs. opt-in remote.
-3. **Profile signing** — GPG-signed tags on deckhand-builds, verified on
+1. **Auto-update** - Deckhand self-update vs. rely on OS package managers.
+2. **Crash reporting** - local-only log collection vs. opt-in remote.
+3. **Profile signing** - GPG-signed tags on deckhand-builds, verified on
    fetch? Adds trust for public contributors but complicates signing flow.
-4. **Build matrix for Linux** — single `.AppImage` covering most distros
+4. **Build matrix for Linux** - single `.AppImage` covering most distros
    vs. per-distro `.deb` / `.rpm` builds.

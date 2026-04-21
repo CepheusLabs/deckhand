@@ -1,4 +1,4 @@
-# Deckhand UI — English strings
+# Deckhand UI - English strings
 #
 # Slang loads these at build time and generates `translations.g.dart`.
 # UI code references strings via `t.<path>` (e.g., `t.welcome.title`).
@@ -33,7 +33,7 @@ welcome:
 pick_printer:
   title: Which printer are you setting up?
   helper: |
-    Deckhand supports these printers. Pick yours — we use that choice to
+    Deckhand supports these printers. Pick yours - we use that choice to
     load the right profile before anything else.
   show_stubs: Show stub profiles
   no_printer_link: My printer isn't here →
@@ -56,7 +56,7 @@ verify:
   title: Verify your printer
   helper: |
     We'll run a few quick checks against your connected printer to
-    confirm this profile matches. Warnings don't block the wizard — you
+    confirm this profile matches. Warnings don't block the wizard - you
     can always proceed.
   action_continue: Continue
   action_back: Back
@@ -116,12 +116,12 @@ firmware:
   helper: |
     Kalico is a community-maintained Klipper fork with weekly rebases
     and helpful extras (gcode_shell_command, danger_options). Mainline
-    Klipper is upstream/master — more conservative.
+    Klipper is upstream/master - more conservative.
 
 webui:
   title: Which web interface?
   helper: |
-    Both Mainsail and Fluidd talk to Moonraker — pick one, the other,
+    Both Mainsail and Fluidd talk to Moonraker - pick one, the other,
     or install both and switch per session. Neither is a power-user
     option: Moonraker is still installed; you can add a UI later.
 

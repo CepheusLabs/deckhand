@@ -23,7 +23,7 @@ abstract class ScriptContext {
   ScriptSshProbe get ssh;
 }
 
-/// Narrow SSH interface available to profile scripts — read-only probes
+/// Narrow SSH interface available to profile scripts - read-only probes
 /// against the printer's currently-established SSH session. Scripts can't
 /// open new connections or run arbitrary commands.
 abstract class ScriptSshProbe {

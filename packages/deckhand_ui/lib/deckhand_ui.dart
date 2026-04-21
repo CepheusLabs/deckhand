@@ -1,4 +1,4 @@
-/// Deckhand UI — wizard screens, theming, router.
+/// Deckhand UI - wizard screens, theming, router.
 library deckhand_ui;
 
 export 'src/i18n/translations.g.dart';

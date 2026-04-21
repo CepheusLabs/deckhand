@@ -73,7 +73,7 @@ class HostKeyMismatchException extends DeckhandException {
   @override
   String get userMessage =>
       'The fingerprint presented by $_host doesn\'t match the one Deckhand '
-      'pinned previously ($_fp). This could mean the printer was reinstalled — '
+      'pinned previously ($_fp). This could mean the printer was reinstalled - '
       'or that something is intercepting the connection. Clear the pinned '
       'fingerprint in Settings if you expected this.';
 }

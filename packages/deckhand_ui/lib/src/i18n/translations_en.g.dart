@@ -101,8 +101,8 @@ class TranslationsPickPrinterEn {
 	/// en: 'Which printer are you setting up?'
 	String get title => 'Which printer are you setting up?';
 
-	/// en: 'Deckhand supports these printers. Pick yours — we use that choice to load the right profile before anything else. '
-	String get helper => 'Deckhand supports these printers. Pick yours — we use that choice to\nload the right profile before anything else.\n';
+	/// en: 'Deckhand supports these printers. Pick yours - we use that choice to load the right profile before anything else. '
+	String get helper => 'Deckhand supports these printers. Pick yours - we use that choice to\nload the right profile before anything else.\n';
 
 	/// en: 'Show stub profiles'
 	String get show_stubs => 'Show stub profiles';
@@ -158,8 +158,8 @@ class TranslationsVerifyEn {
 	/// en: 'Verify your printer'
 	String get title => 'Verify your printer';
 
-	/// en: 'We'll run a few quick checks against your connected printer to confirm this profile matches. Warnings don't block the wizard — you can always proceed. '
-	String get helper => 'We\'ll run a few quick checks against your connected printer to\nconfirm this profile matches. Warnings don\'t block the wizard — you\ncan always proceed.\n';
+	/// en: 'We'll run a few quick checks against your connected printer to confirm this profile matches. Warnings don't block the wizard - you can always proceed. '
+	String get helper => 'We\'ll run a few quick checks against your connected printer to\nconfirm this profile matches. Warnings don\'t block the wizard - you\ncan always proceed.\n';
 
 	/// en: 'Continue'
 	String get action_continue => 'Continue';
@@ -236,8 +236,8 @@ class TranslationsFirmwareEn {
 	/// en: 'Pick your firmware'
 	String get title => 'Pick your firmware';
 
-	/// en: 'Kalico is a community-maintained Klipper fork with weekly rebases and helpful extras (gcode_shell_command, danger_options). Mainline Klipper is upstream/master — more conservative. '
-	String get helper => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master — more conservative.\n';
+	/// en: 'Kalico is a community-maintained Klipper fork with weekly rebases and helpful extras (gcode_shell_command, danger_options). Mainline Klipper is upstream/master - more conservative. '
+	String get helper => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master - more conservative.\n';
 }
 
 // Path: webui
@@ -251,8 +251,8 @@ class TranslationsWebuiEn {
 	/// en: 'Which web interface?'
 	String get title => 'Which web interface?';
 
-	/// en: 'Both Mainsail and Fluidd talk to Moonraker — pick one, the other, or install both and switch per session. Neither is a power-user option: Moonraker is still installed; you can add a UI later. '
-	String get helper => 'Both Mainsail and Fluidd talk to Moonraker — pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n';
+	/// en: 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other, or install both and switch per session. Neither is a power-user option: Moonraker is still installed; you can add a UI later. '
+	String get helper => 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n';
 }
 
 // Path: kiauh
@@ -674,7 +674,7 @@ extension on Translations {
 			'welcome.card_safety.title' => 'Safety',
 			'welcome.card_safety.body' => 'Nothing destructive happens without explicit confirmation. Deckhand\ncan back up your entire eMMC to an image before any firmware swap,\nso you always have a route back to stock.\n',
 			'pick_printer.title' => 'Which printer are you setting up?',
-			'pick_printer.helper' => 'Deckhand supports these printers. Pick yours — we use that choice to\nload the right profile before anything else.\n',
+			'pick_printer.helper' => 'Deckhand supports these printers. Pick yours - we use that choice to\nload the right profile before anything else.\n',
 			'pick_printer.show_stubs' => 'Show stub profiles',
 			'pick_printer.no_printer_link' => 'My printer isn\'t here →',
 			'pick_printer.action_continue' => 'Continue',
@@ -687,7 +687,7 @@ extension on Translations {
 			'connect.action_connect' => 'Connect',
 			'connect.action_connecting' => 'Connecting…',
 			'verify.title' => 'Verify your printer',
-			'verify.helper' => 'We\'ll run a few quick checks against your connected printer to\nconfirm this profile matches. Warnings don\'t block the wizard — you\ncan always proceed.\n',
+			'verify.helper' => 'We\'ll run a few quick checks against your connected printer to\nconfirm this profile matches. Warnings don\'t block the wizard - you\ncan always proceed.\n',
 			'verify.action_continue' => 'Continue',
 			'verify.action_back' => 'Back',
 			'choose_path.title' => 'Which path do you want to take?',
@@ -714,9 +714,9 @@ extension on Translations {
 			'errors.sidecar_start.title' => 'Helper binary didn\'t start',
 			'errors.sidecar_rpc.title' => 'Background operation failed',
 			'firmware.title' => 'Pick your firmware',
-			'firmware.helper' => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master — more conservative.\n',
+			'firmware.helper' => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master - more conservative.\n',
 			'webui.title' => 'Which web interface?',
-			'webui.helper' => 'Both Mainsail and Fluidd talk to Moonraker — pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n',
+			'webui.helper' => 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n',
 			'kiauh.title' => 'Install KIAUH?',
 			'screen_choice.title' => 'Pick a screen daemon',
 			'services.counter' => ({required Object current, required Object total}) => '${current} of ${total}',

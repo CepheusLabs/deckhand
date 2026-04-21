@@ -16,7 +16,7 @@ import 'dsl.dart';
 /// Which high-level flow the wizard is running.
 enum WizardFlow { none, stockKeep, freshFlash }
 
-/// Wizard state machine — profile-driven, UI-agnostic.
+/// Wizard state machine - profile-driven, UI-agnostic.
 class WizardController {
   WizardController({
     required this.profiles,
@@ -72,6 +72,27 @@ class WizardController {
       host: host,
       port: port ?? pf.ssh.defaultPort,
       credentials: creds.cast<SshCredential>(),
+    );
+    _session = session;
+    _state = _state.copyWith(sshHost: host);
+    _emit(SshConnected(host: host, user: session.user));
+  }
+
+  /// Connect with a specific username/password. Used as the fallback when
+  /// the profile's default credentials don't authenticate (e.g. the user
+  /// has changed the stock password).
+  Future<void> connectSshWithPassword({
+    required String host,
+    int? port,
+    required String user,
+    required String password,
+  }) async {
+    final pf = _profile;
+    final p = port ?? pf?.ssh.defaultPort ?? 22;
+    final session = await ssh.connect(
+      host: host,
+      port: p,
+      credential: PasswordCredential(user: user, password: password),
     );
     _session = session;
     _state = _state.copyWith(sshHost: host);
@@ -187,7 +208,7 @@ class WizardController {
         _emit(
           StepWarning(
             stepId: id,
-            message: 'Unknown step kind "$kind" — skipping',
+            message: 'Unknown step kind "$kind" - skipping',
           ),
         );
     }
@@ -363,12 +384,37 @@ class WizardController {
           _log(step, '[files] SKIPPING dangerous path: $path');
           continue;
         }
-        final cmd = 'sudo rm -rf ${_shellQuote(path)}';
+        final String cmd;
+        if (_hasGlob(path)) {
+          // Glob path: `find <dir> -maxdepth 1 -name <pattern> -delete`
+          // handles the expansion itself (so the shell doesn't need to)
+          // and cleanly no-ops when the pattern matches nothing. Only
+          // the trailing segment is allowed to contain wildcards; the
+          // parent directory must be a concrete path so we refuse to
+          // recurse into anything unexpected.
+          final dir = p.posix.dirname(path);
+          final pattern = p.posix.basename(path);
+          if (_hasGlob(dir) || _isDangerousPath(dir)) {
+            _log(step, '[files] SKIPPING unsafe glob directory: $dir');
+            continue;
+          }
+          cmd =
+              'sudo find ${_shellQuote(dir)} -maxdepth 1 -name ${_shellQuote(pattern)} -print -exec rm -rf {} +';
+        } else {
+          cmd = 'sudo rm -rf ${_shellQuote(path)}';
+        }
         final res = await ssh.run(s, cmd);
         _log(step, '[files] rm ${f.id}: $path (exit ${res.exitCode})');
+        if (res.stdout.trim().isNotEmpty) {
+          for (final line in res.stdout.trim().split('\n')) {
+            _log(step, '[files]   removed: $line');
+          }
+        }
       }
     }
   }
+
+  bool _hasGlob(String path) => RegExp(r'[*?\[]').hasMatch(path);
 
   Future<void> _runWriteFile(Map<String, dynamic> step) async {
     final s = _requireSession();
@@ -405,7 +451,7 @@ class WizardController {
     final s = _requireSession();
     final screenId = _state.decisions['screen'] as String?;
     if (screenId == null) {
-      _log(step, '[screen] no screen selected — skipping install');
+      _log(step, '[screen] no screen selected - skipping install');
       return;
     }
     final screen = _profile!.screens.firstWhere(
@@ -438,7 +484,7 @@ class WizardController {
     } else if (sourceKind == 'restore_from_backup') {
       _log(
         step,
-        '[screen] $screenId restore-from-backup requires a mounted backup image — not yet automated',
+        '[screen] $screenId restore-from-backup requires a mounted backup image - not yet automated',
       );
     } else {
       _log(
@@ -490,7 +536,7 @@ class WizardController {
       }
       _log(
         step,
-        '[mcu] $id flash pending — refer to profile firmware/flash-$id.sh',
+        '[mcu] $id flash pending - refer to profile firmware/flash-$id.sh',
       );
     }
   }
@@ -552,7 +598,7 @@ class WizardController {
         case 'http_get':
           final host = _state.sshHost;
           if (host == null) {
-            _log(step, '[verify] ${v.id}: no host — skipping');
+            _log(step, '[verify] ${v.id}: no host - skipping');
             continue;
           }
           final url = (v.raw['url'] as String? ?? '').replaceAll(
@@ -588,7 +634,7 @@ class WizardController {
     );
     final matches = _dsl.evaluate(when, env);
     if (!matches) {
-      _log(step, '[conditional] skipping — condition false');
+      _log(step, '[conditional] skipping - condition false');
       return;
     }
     final thenSteps = ((step['then'] as List?) ?? const [])

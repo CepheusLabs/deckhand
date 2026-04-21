@@ -11,7 +11,7 @@ class VerifyScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Simplified — a real implementation runs each of the profile's
+    // Simplified - a real implementation runs each of the profile's
     // stock_os.detections over SSH and shows per-check pass/fail. For
     // now we present a checklist view keyed off profile detection rules
     // and let the user acknowledge.
@@ -24,7 +24,7 @@ class VerifyScreen extends ConsumerWidget {
       title: 'Verify your printer',
       helperText:
           'We\'ll run a few quick checks against your connected printer to '
-          'confirm this profile matches. Warnings don\'t block the wizard — '
+          'confirm this profile matches. Warnings don\'t block the wizard - '
           'you can always proceed.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

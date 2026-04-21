@@ -17,7 +17,7 @@ class DoneScreen extends ConsumerWidget {
       title: 'Setup complete',
       helperText:
           'Your printer is running community firmware with the configuration '
-          'you picked. Deckhand\'s job ends here — day-to-day updates happen '
+          'you picked. Deckhand\'s job ends here - day-to-day updates happen '
           'via Moonraker\'s own update_manager or KIAUH.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

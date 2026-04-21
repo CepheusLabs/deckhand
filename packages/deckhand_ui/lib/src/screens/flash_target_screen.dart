@@ -72,7 +72,7 @@ class _FlashTargetScreenState extends ConsumerState<FlashTargetScreen> {
                       title: Text(d.model.isEmpty ? d.id : d.model),
                       subtitle: Text(
                         '${_formatBytes(d.sizeBytes)} · ${d.bus}'
-                        '${d.removable ? "" : " · (non-removable — dimmed)"}',
+                        '${d.removable ? "" : " · (non-removable - dimmed)"}',
                       ),
                     ),
                   ),

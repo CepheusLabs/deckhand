@@ -1,4 +1,4 @@
-# Wizard flow — what the user sees
+# Wizard flow - what the user sees
 
 > This document is the UX specification for Deckhand's GUI wizard. Each
 > screen is numbered, named, and maps to the profile fields it consumes
@@ -16,7 +16,7 @@
   called out.
 - **Everything destructive asks for an explicit in-UI confirmation.**
 
-## Navigation — progress stepper
+## Navigation - progress stepper
 
 Every wizard screen (S10 through S910) carries a **horizontal progress
 stepper along the top of the window**. It shows the full path as a series
@@ -41,7 +41,7 @@ stock-keep to fresh-flash clears the services/files decisions).
 Steps are driven by the active profile's `wizard.steps_override` block if
 present; otherwise Deckhand uses the default step set described below.
 
-Forward navigation never skips steps — users advance via the primary
+Forward navigation never skips steps - users advance via the primary
 action on each screen. Only backward navigation uses the stepper.
 
 ---
@@ -73,7 +73,7 @@ by both flows.
 **Picking the printer model before SSH** means Deckhand knows which profile
 to load before any network activity, which credentials to try first, and
 which required hosts to batch-approve. The user already knows what printer
-they bought — asking upfront is more honest than trying to infer it.
+they bought - asking upfront is more honest than trying to infer it.
 
 ---
 
@@ -89,7 +89,7 @@ the user resume an in-progress install.
 - Deckhand logo + strapline: "Flash, set up, and maintain Klipper-based
   printers."
 - One-paragraph intro.
-- "Resume in-progress install" (if any) — reads from
+- "Resume in-progress install" (if any) - reads from
   `state/recent_activity.json`.
 - "Help & FAQ" → external link.
 
@@ -123,9 +123,9 @@ steps are driven by that profile.
 
 - `ProfileService.fetchRegistry()` → list of (profile_id, display_name,
   status, repo, latest_tag).
-- `ProfileService.ensureCached(profile_id, tag)` — shallow clone of the
+- `ProfileService.ensureCached(profile_id, tag)` - shallow clone of the
   builds repo tag into the local cache.
-- `SecurityService.requestHostApprovals(profile.required_hosts)` — batch
+- `SecurityService.requestHostApprovals(profile.required_hosts)` - batch
   prompts the user for network allow-list approval before we hit any of
   the hosts the profile declares.
 
@@ -155,12 +155,12 @@ profile's default credentials.
    - List of connections from `state/connections.json`, filtered to
      previous sessions for the same `profile_id`.
 
-**Primary action.** "Connect" — tries the profile's `ssh.default_credentials`
+**Primary action.** "Connect" - tries the profile's `ssh.default_credentials`
 in order. If saved connection is used, tries saved credentials first.
 
 **Adapter calls.**
 
-- `DiscoveryService.scanMdns(timeout: 5s)` — populates list.
+- `DiscoveryService.scanMdns(timeout: 5s)` - populates list.
 - `SshService.tryDefaults(host, profile.ssh.default_credentials)` on connect.
 - If defaults fail, a modal prompts for user/password/key.
 
@@ -173,7 +173,7 @@ in order. If saved connection is used, tries saved credentials first.
 
 **Notes.**
 
-- SSH sessions are resumable — if the app loses the connection mid-flow,
+- SSH sessions are resumable - if the app loses the connection mid-flow,
   next screen re-establishes silently.
 - User's password is stored in OS keychain only if they check "Remember"
   (unchecked by default).
@@ -235,11 +235,11 @@ Two large cards:
 
 **Primary action.** "Continue" with the selected card.
 
-**Adapter calls.** None at this screen — just reads profile info.
+**Adapter calls.** None at this screen - just reads profile info.
 
 ---
 
-## Flow A — stock keep
+## Flow A - stock keep
 
 Profile-driven questions. The wizard walks the `stock_os.services` and
 `stock_os.files` inventories and asks per-item decisions.
@@ -272,13 +272,13 @@ a banner: "Will build Python 3.11 from source (~20 min)."
 
 **Body.** Three cards + one checkbox:
 
-- **Mainsail** — "Fast, opinionated, darker aesthetic. Recommended if you
+- **Mainsail** - "Fast, opinionated, darker aesthetic. Recommended if you
   want a focused UI optimized for print day-to-day."
-- **Fluidd** — "Extensible, dashboard-oriented, lighter aesthetic.
+- **Fluidd** - "Extensible, dashboard-oriented, lighter aesthetic.
   Recommended if you want more customization and file-browser-first."
-- **Both** — "Install both and let yourself choose per session. They
+- **Both** - "Install both and let yourself choose per session. They
   coexist on different ports."
-- **[ ] Neither — I'll handle web UI myself** (advanced).
+- **[ ] Neither - I'll handle web UI myself** (advanced).
 
 Each card shows the upstream GitHub link, the default port, and the asset
 name shipped in that project's releases.
@@ -305,15 +305,15 @@ name shipped in that project's releases.
 
 - Header: "Install KIAUH?"
 - Explainer paragraph: "KIAUH is the Klipper Installation And Update
-  Helper — an interactive menu you run over SSH (`./kiauh/kiauh.sh`) that
+  Helper - an interactive menu you run over SSH (`./kiauh/kiauh.sh`) that
   lets you install, update, remove, and troubleshoot every piece of the
   Klipper stack (Klipper/Kalico, Moonraker, Mainsail, Fluidd, crowsnest,
   more). It's the de-facto community tool for fleet maintenance and is
   what most Klipper tutorials reference. Deckhand handles first-install;
   KIAUH handles ongoing tweaks you might want later."
 - Two options:
-  - **Install KIAUH** (recommended) — adds `~/kiauh` to the printer.
-  - **Skip** — you can install it later with `git clone
+  - **Install KIAUH** (recommended) - adds `~/kiauh` to the printer.
+  - **Skip** - you can install it later with `git clone
     https://github.com/dw-0/kiauh.git`.
 - A "What KIAUH can do for you" expander with 4-5 bullet examples
   (install an additional Klipper instance, swap branches, reinstall
@@ -361,7 +361,7 @@ Special handling:
 - Helper text paragraph (from `wizard.helper_text`).
 - Options as a radio group (from `wizard.options[]`).
 - "Recommended: X" badge on the default option.
-- Side panel: "What this service does" — expanded description from
+- Side panel: "What this service does" - expanded description from
   `roles[]` if present.
 
 **Per-service default** is resolved by evaluating
@@ -417,7 +417,7 @@ If "change default SSH password" is selected, a sub-field shows up inline
 
 ---
 
-## Flow B — fresh flash
+## Flow B - fresh flash
 
 ### S200-flash-target
 
@@ -430,7 +430,7 @@ to wipe this disk."
 - Table of local disks (from `FlashService.listDisks()`).
   - Columns: Name/model, bus (USB/NVMe/SATA), size, partitions, "removable".
 - Disks that don't match `hardware.sbc.emmc_size_bytes` ±10% are dimmed
-  with "doesn't match expected eMMC size" note — users can still override
+  with "doesn't match expected eMMC size" note - users can still override
   with an extra confirmation.
 - Refresh button.
 
@@ -450,7 +450,7 @@ to wipe this disk."
 
 - Name, recommended badge, approximate size, notes.
 - Each card has a "Show URL + SHA256" expander.
-- Bottom section: "Use a local image file" — file picker for users who
+- Bottom section: "Use a local image file" - file picker for users who
   downloaded ahead of time.
 
 **Primary action.** "Continue".
@@ -469,9 +469,9 @@ to wipe this disk."
   - [ ] I have backed up anything I need from this disk.
   - [ ] I understand this cannot be undone.
 - Disk summary panel at the bottom: model, size, bus (USB), partitions with
-  filesystem types — so the user sees once more what they're about to wipe.
+  filesystem types - so the user sees once more what they're about to wipe.
 
-**Primary action.** Red-styled button "Wipe and flash" — enabled only when
+**Primary action.** Red-styled button "Wipe and flash" - enabled only when
 both boxes ticked. Clicking opens a final modal:
 
 > ### Wipe {{disk_model}}?
@@ -484,7 +484,7 @@ Default focus on `Cancel`; `Enter` does not trigger the wipe.
 
 **Adapter calls.**
 
-- `SecurityService.issueConfirmationToken(op: "flash", target: disk_id)` —
+- `SecurityService.issueConfirmationToken(op: "flash", target: disk_id)` -
   60s single-use token issued after the modal is confirmed.
 
 ---
@@ -496,15 +496,15 @@ Default focus on `Cancel`; `Enter` does not trigger the wipe.
 **Body.**
 
 - Big progress bar (bytes written / total bytes).
-- Secondary line: "Writing at 22.4 MB/s — ETA 2:14".
+- Secondary line: "Writing at 22.4 MB/s - ETA 2:14".
 - Log window showing the last N log lines.
-- "Abort" button (requires extra confirmation — aborting mid-write leaves
+- "Abort" button (requires extra confirmation - aborting mid-write leaves
   the disk in an unknown state).
 
 **Adapter calls.**
 
 - `OsService.download(url, sha256, dest)` if not cached.
-- `FlashService.writeImage(imagePath, diskId, confirmationToken)` —
+- `FlashService.writeImage(imagePath, diskId, confirmationToken)` -
   returns a `Stream<FlashProgress>`.
 
 After write: automatic integrity check (`disks.hash` of the written disk
@@ -529,13 +529,13 @@ try another adapter, check the USB cable, re-flash.
 - Step 1: Unplug the USB adapter.
 - Step 2: Put the eMMC module back in your printer.
 - Step 3: Power on.
-- Step 4: "Deckhand will poll for SSH access — wait up to 10 minutes."
+- Step 4: "Deckhand will poll for SSH access - wait up to 10 minutes."
 - Live status line: "Waiting for SSH at 192.168.1.50:22…"
 
 **Adapter calls.**
 
 - `DiscoveryService.waitForSsh(host: detected_or_manual, timeout: 600s)`
-  — polls via TCP connect then `ssh -T`.
+  - polls via TCP connect then `ssh -T`.
 
 ---
 
@@ -664,15 +664,15 @@ second-chance last look, not a first-time warning.
 
 These can appear at any point:
 
-- **E-net-unreachable** — "Can't reach that printer. Check your network."
-- **E-ssh-auth** — "We couldn't log in. Enter credentials manually."
-- **E-host-key-mismatch** — Hard stop. Explanation + "Clear stored
+- **E-net-unreachable** - "Can't reach that printer. Check your network."
+- **E-ssh-auth** - "We couldn't log in. Enter credentials manually."
+- **E-host-key-mismatch** - Hard stop. Explanation + "Clear stored
   fingerprint" button.
-- **E-sidecar-missing** — "Helper binary missing; please reinstall Deckhand."
-- **E-disk-io** — During flash; surfaces the OS error + suggests retry.
-- **E-profile-fetch-failed** — "Can't fetch profile from deckhand-builds.
+- **E-sidecar-missing** - "Helper binary missing; please reinstall Deckhand."
+- **E-disk-io** - During flash; surfaces the OS error + suggests retry.
+- **E-profile-fetch-failed** - "Can't fetch profile from deckhand-builds.
   Check internet or provide local path."
-- **E-unknown** — generic with "Save debug bundle" button.
+- **E-unknown** - generic with "Save debug bundle" button.
 
 Each error screen has a "Back" option (to the previous non-error screen)
 and "Quit" (save state to `state/recent_activity.json` so S10 can resume).
@@ -681,14 +681,14 @@ and "Quit" (save state to `state/recent_activity.json` so S10 can resume).
 
 ## Settings (accessible from header bar)
 
-- **General** — default flash verification behavior, retain debug bundles
+- **General** - default flash verification behavior, retain debug bundles
   after success (yes/no), Deckhand check-for-updates cadence.
-- **Connections** — saved printer endpoints, manage (rename, delete,
+- **Connections** - saved printer endpoints, manage (rename, delete,
   set fingerprint).
-- **Profiles** — installed profile cache versions, "check for updates",
+- **Profiles** - installed profile cache versions, "check for updates",
   "use edge (main branch) for profile X" toggle.
-- **Appearance** — theme (system/light/dark), density (compact/comfy).
-- **Advanced** — GitHub API token (for unauthenticated rate-limit relief),
+- **Appearance** - theme (system/light/dark), density (compact/comfy).
+- **Advanced** - GitHub API token (for unauthenticated rate-limit relief),
   allow-listed hosts (network egress), sidecar path override.
 
 ---
@@ -697,7 +697,7 @@ and "Quit" (save state to `state/recent_activity.json` so S10 can resume).
 
 The wizard is the install flow. Deckhand also has a **manage** view shown
 when the user opens the app with an already-configured printer. Scope is
-intentionally narrow — anything Klipper's / Kalico's / Moonraker's own
+intentionally narrow - anything Klipper's / Kalico's / Moonraker's own
 update paths already handle stays with those native tools.
 
 | Tab | What it does | Why Deckhand owns it |
@@ -725,11 +725,11 @@ flows that work well with their native homes.
 
 - **Min width 1024px** for comfortable wizard display. Deckhand's desktop
   targets don't go narrower than that in practice.
-- **Keyboard navigation** — Tab ordering defined per screen; Enter submits
+- **Keyboard navigation** - Tab ordering defined per screen; Enter submits
   the primary action; Esc goes back.
-- **Screen reader** — each screen declares a title and a semantic outline
+- **Screen reader** - each screen declares a title and a semantic outline
   of its sections.
-- **Localization** — Slang i18n keys. English at v1; add locales
+- **Localization** - Slang i18n keys. English at v1; add locales
   incrementally.
 
 ---

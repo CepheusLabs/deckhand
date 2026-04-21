@@ -1,4 +1,4 @@
-/// Deckhand core — models, service interfaces, and wizard state.
+/// Deckhand core - models, service interfaces, and wizard state.
 ///
 /// This package is UI-agnostic and host-agnostic. Concrete implementations
 /// of the service interfaces live in their own packages.

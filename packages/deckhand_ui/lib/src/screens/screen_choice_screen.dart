@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers.dart';
+import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -16,21 +17,37 @@ class ScreenChoiceScreen extends ConsumerStatefulWidget {
 class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
   String? _choice;
 
+  bool _isSelectable(dynamic s) {
+    // Alpha / experimental screens are shown but not selectable by
+    // default - they're incomplete and the user shouldn't accidentally
+    // pick one. Advanced users can flip the status in the profile to
+    // unlock.
+    final status = s.status as String?;
+    return status != 'alpha' && status != 'experimental';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final screens =
         ref.watch(wizardControllerProvider).profile?.screens ?? const [];
     _choice ??= screens
-        .firstWhere((s) => s.recommended, orElse: () => screens.first)
+        .firstWhere(
+          (s) => s.recommended && _isSelectable(s),
+          orElse: () => screens.firstWhere(
+            _isSelectable,
+            orElse: () => screens.first,
+          ),
+        )
         .id;
 
     return WizardScaffold(
       stepper: const DeckhandStepper(),
       title: 'Pick a screen daemon',
       helperText:
-          'The screen daemon drives your printer\'s touchscreen. Some options '
-          'may require restoring closed-source binaries from a backup — those '
-          'cards will say so.',
+          'The screen daemon drives your printer\'s touchscreen. Options '
+          'marked alpha are in development and disabled here; pick one of '
+          'the stable choices for daily use.',
       body: RadioGroup<String>(
         groupValue: _choice,
         onChanged: (v) => setState(() => _choice = v),
@@ -38,15 +55,28 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final s in screens)
-              Card(
-                elevation: _choice == s.id ? 4 : 1,
-                color: _choice == s.id
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : null,
-                child: RadioListTile<String>(
-                  value: s.id,
-                  title: Text(s.displayName ?? s.id),
-                  subtitle: Text(_subtitle(s)),
+              Opacity(
+                opacity: _isSelectable(s) ? 1.0 : 0.45,
+                child: Card(
+                  elevation: _choice == s.id ? 4 : 1,
+                  color: _choice == s.id
+                      ? theme.colorScheme.primaryContainer
+                      : null,
+                  child: RadioListTile<String>(
+                    value: s.id,
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(s.displayName ?? s.id)),
+                        if (s.status != null) ...[
+                          const SizedBox(width: 8),
+                          _StatusBadge(status: s.status as String),
+                        ],
+                      ],
+                    ),
+                    subtitle: _subtitle(context, s),
+                    isThreeLine: _hasNotes(s),
+                    enabled: _isSelectable(s),
+                  ),
                 ),
               ),
           ],
@@ -69,11 +99,49 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
     );
   }
 
-  String _subtitle(dynamic s) {
-    final parts = <String>[];
-    if (s.status != null) parts.add('status: ${s.status}');
-    final kind = s.raw['source_kind'] as String?;
-    if (kind != null) parts.add('source: $kind');
-    return parts.join(' · ');
+  bool _hasNotes(dynamic s) {
+    final notes = s.raw['notes'] as String?;
+    return notes != null && notes.trim().isNotEmpty;
+  }
+
+  Widget _subtitle(BuildContext context, dynamic s) {
+    final notes = flattenProfileText(s.raw['notes'] as String?);
+    if (notes.isEmpty) {
+      final kind = s.raw['source_kind'] as String?;
+      return Text(kind == null ? '' : 'source: $kind');
+    }
+    return Text(notes);
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = switch (status) {
+      'stable' => theme.colorScheme.tertiary,
+      'beta' => theme.colorScheme.secondary,
+      'alpha' => theme.colorScheme.primary,
+      'experimental' => theme.colorScheme.error,
+      'deprecated' => theme.colorScheme.error,
+      _ => theme.colorScheme.outline,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        status,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }

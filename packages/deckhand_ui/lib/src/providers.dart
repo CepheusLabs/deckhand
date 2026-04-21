@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Root providers for the Deckhand UI. Each service is intentionally
 /// created via `throwUnimplementedProvider` so the app must override
-/// them at bootstrap — there are no "magic defaults."
+/// them at bootstrap - there are no "magic defaults."
 T _throwUnimplemented<T>(String name) =>
     throw UnimplementedError('Provider $name not overridden at app startup');
 

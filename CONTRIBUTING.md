@@ -5,17 +5,17 @@
 Deckhand uses **date-based CalVer** (matching Printdeck's
 `frontend/scripts/build.sh`):
 
-- **Version**: today's UTC date, not zero-padded — `YY.M.D` (e.g. `26.4.18`)
+- **Version**: today's UTC date, not zero-padded - `YY.M.D` (e.g. `26.4.18`)
 - **Build number**: total `git rev-list --count HEAD` (monotonic)
 - **Tag**: `v<VERSION>-<BUILD>` (e.g. `v26.4.18-1247`)
 
-The version is computed automatically — there's nothing to bump, nothing
+The version is computed automatically - there's nothing to bump, nothing
 to remember. You write code, push, GitHub Actions stamps the release.
 
 ## Commit messages
 
 No conventional-commits discipline required (but no harm in using them
-if you want — the release notes are generated from `git log`).
+if you want - the release notes are generated from `git log`).
 
 Keep commits reasonably self-contained and their subjects meaningful;
 the GitHub Release for each version lists every commit that landed since
@@ -41,7 +41,7 @@ Windows Flutter builds.
 
 `Actions → Release → Run workflow`, enter a branch / tag / SHA in the
 `ref` input. The workflow still computes the version from today's date
-— if you want a reproducible rebuild of an old tag, check out that tag
+- if you want a reproducible rebuild of an old tag, check out that tag
 locally and push it back with a new tag name, or just accept today's
 date as the new version.
 

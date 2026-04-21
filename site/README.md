@@ -7,7 +7,7 @@ Static site served at `https://dh.printdeck.io` via Cloudflare Pages.
 1. In Cloudflare → **Workers & Pages → Create application → Pages → Connect to Git**.
 2. Select `CepheusLabs/deckhand` and authorize.
 3. Configure the build:
-   - **Build command**: *(leave empty — static files are committed directly)*
+   - **Build command**: *(leave empty - static files are committed directly)*
    - **Build output directory**: `site`
    - **Root directory**: `/` (repo root)
 4. Add the custom domain `dh.printdeck.io` under **Custom domains**.

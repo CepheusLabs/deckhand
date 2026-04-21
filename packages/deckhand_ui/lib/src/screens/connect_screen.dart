@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,19 +40,73 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _scan() async {
     setState(() {
       _scanning = true;
+      _discovered = const [];
     });
+    final discovery = ref.read(discoveryServiceProvider);
+
+    // mDNS only works if the printer has Moonraker's zeroconf advertiser
+    // enabled - many KIAUH/stock installs don't. So we ALSO sweep port
+    // 7125 (Moonraker default) across each /24 this host is attached to.
+    // Whichever hits first populates the list; results are merged by host.
+    final cidrs = await _localCidrs();
+
+    final futures = <Future<List<DiscoveredPrinter>>>[
+      discovery.scanMdns(timeout: const Duration(seconds: 4)).catchError(
+        (_) => <DiscoveredPrinter>[],
+      ),
+      for (final c in cidrs)
+        discovery
+            .scanCidr(
+              cidr: c,
+              port: 7125,
+              timeout: const Duration(seconds: 1),
+            )
+            .catchError((_) => <DiscoveredPrinter>[]),
+    ];
+
+    final merged = <String, DiscoveredPrinter>{};
+    // As each probe finishes, fold its results in and update the UI so the
+    // user sees printers appearing progressively instead of waiting for
+    // the slowest scan.
+    var outstanding = futures.length;
+    for (final f in futures) {
+      f.then((found) {
+        for (final p in found) {
+          merged.putIfAbsent(p.host, () => p);
+        }
+        if (!mounted) return;
+        setState(() {
+          _discovered = merged.values.toList();
+        });
+      }).whenComplete(() {
+        outstanding--;
+        if (outstanding == 0 && mounted) {
+          setState(() => _scanning = false);
+        }
+      });
+    }
+  }
+
+  /// Return /24 CIDRs for every non-loopback IPv4 interface on this host.
+  /// Each /24 is probed with a 1-second TCP connect to port 7125 per IP.
+  Future<List<String>> _localCidrs() async {
     try {
-      final results = await ref
-          .read(discoveryServiceProvider)
-          .scanMdns(timeout: const Duration(seconds: 4));
-      if (!mounted) return;
-      setState(() => _discovered = results);
-    } catch (e) {
-      // Discovery failures are non-fatal; the user can always type.
-      if (!mounted) return;
-      setState(() => _discovered = const []);
-    } finally {
-      if (mounted) setState(() => _scanning = false);
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        includeLinkLocal: false,
+        type: InternetAddressType.IPv4,
+      );
+      final cidrs = <String>{};
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final parts = addr.address.split('.');
+          if (parts.length != 4) continue;
+          cidrs.add('${parts[0]}.${parts[1]}.${parts[2]}.0/24');
+        }
+      }
+      return cidrs.toList();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -77,7 +133,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       stepper: const DeckhandStepper(),
       title: 'Connect to your printer',
       helperText:
-          'Deckhand scans your LAN for Moonraker-advertising printers. '
+          'Deckhand scans your LAN two ways: mDNS for printers that advertise '
+          'Moonraker, and a TCP sweep of port 7125 across your local subnet. '
           'Pick one below, or enter an IP/hostname manually. Authentication '
           'uses the default SSH credentials declared by this printer\'s profile.',
       body: Column(
@@ -108,8 +165,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           const SizedBox(height: 8),
           if (!_scanning && _discovered.isEmpty)
             Text(
-              'No printers advertised Moonraker over mDNS. Enter your '
-              'printer\'s IP below.',
+              'Nothing responded on port 7125 across your local subnet, and '
+              'no Moonraker mDNS advertisements were seen either. Your '
+              'printer may be on a different VLAN, behind a firewall, or '
+              'using a non-default port - enter the IP/hostname below.',
               style: theme.textTheme.bodySmall,
             )
           else

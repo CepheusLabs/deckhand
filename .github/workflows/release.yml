@@ -10,8 +10,8 @@ name: Release
 #                         ref, defaults to main)
 
 on:
-  push:
-    branches: [main]
+  # Release is manual-only for now. Flip push-on-main back on once the
+  # installer pipeline is green end-to-end.
   workflow_dispatch:
     inputs:
       ref:

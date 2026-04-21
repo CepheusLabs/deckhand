@@ -8,9 +8,9 @@ Klipper-based 3D printers.
 
 ## Start here
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — overall design, package
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - overall design, package
   layout, sidecar model, cross-platform packaging.
-- [`docs/WIZARD-FLOW.md`](docs/WIZARD-FLOW.md) — screen-by-screen UX
+- [`docs/WIZARD-FLOW.md`](docs/WIZARD-FLOW.md) - screen-by-screen UX
   specification for the install wizard.
 
 Printer profiles (the per-printer definitions that drive Deckhand) live in
@@ -26,7 +26,7 @@ flashes a clean OS to the eMMC and installs the stack from scratch. Either
 way, you end up with a printer running community-maintained firmware, a
 web UI (Mainsail, Fluidd, or both), and optionally KIAUH for ongoing
 tweaks. Deckhand stops where native Klipper tooling takes over for
-day-to-day updates — it's a setup tool, not a lifecycle manager for
+day-to-day updates - it's a setup tool, not a lifecycle manager for
 firmware releases.
 
 ## Architecture

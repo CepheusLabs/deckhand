@@ -14,9 +14,10 @@ class HardeningScreen extends ConsumerStatefulWidget {
 }
 
 class _HardeningScreenState extends ConsumerState<HardeningScreen> {
+  // makerbase_udp and makerbase_net_mods are already asked on the
+  // Services screen; don't duplicate them here. This page is for
+  // cross-cutting hardening that isn't tied to a single stock service.
   final _enabled = <String, bool>{
-    'makerbase_udp': false,
-    'makerbase_net_mods': false,
     'fix_timesync': false,
     'change_password': false,
   };
@@ -41,16 +42,6 @@ class _HardeningScreenState extends ConsumerState<HardeningScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _toggle(
-            'makerbase_udp',
-            'Disable makerbase-udp (LAN file-upload service)',
-            'Listens on UDP + HTTP without auth. Kills MKS slicer/phone-app discovery.',
-          ),
-          _toggle(
-            'makerbase_net_mods',
-            'Disable USB wifi provisioning',
-            'Closes a physical-access takeover vector.',
-          ),
           _toggle(
             'fix_timesync',
             'Fix time-sync conflict (keep chrony only)',

@@ -4,7 +4,7 @@ import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
-/// Default [SecurityService] — in-memory single-use confirmation tokens
+/// Default [SecurityService] - in-memory single-use confirmation tokens
 /// backed by flutter_secure_storage for persistent fingerprints + host
 /// allow-list state.
 class DefaultSecurityService implements SecurityService {

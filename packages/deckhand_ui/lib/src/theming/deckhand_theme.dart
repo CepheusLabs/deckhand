@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Deckhand's Material 3 theme. Placeholder — real palette + typography
+/// Deckhand's Material 3 theme. Placeholder - real palette + typography
 /// decisions pending a design pass.
 class DeckhandTheme {
   static ThemeData light() => ThemeData(
