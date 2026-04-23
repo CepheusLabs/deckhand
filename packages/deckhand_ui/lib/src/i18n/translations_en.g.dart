@@ -131,8 +131,8 @@ class TranslationsConnectEn {
 	/// en: 'Connect to your printer'
 	String get title => 'Connect to your printer';
 
-	/// en: 'Enter your printer's IP address (or hostname). Deckhand will authenticate using the default SSH credentials declared by this printer's profile. '
-	String get helper => 'Enter your printer\'s IP address (or hostname). Deckhand will\nauthenticate using the default SSH credentials declared by this\nprinter\'s profile.\n';
+	/// en: 'Deckhand scans your LAN two ways: mDNS for printers that advertise Moonraker, and a TCP sweep of port 7125 across your local subnet. Each host is probed to see whether it matches your selected profile - confirmed matches surface at the top. '
+	String get helper => 'Deckhand scans your LAN two ways: mDNS for printers that advertise\nMoonraker, and a TCP sweep of port 7125 across your local subnet.\nEach host is probed to see whether it matches your selected\nprofile - confirmed matches surface at the top.\n';
 
 	/// en: 'Host or IP'
 	String get field_host => 'Host or IP';
@@ -145,6 +145,54 @@ class TranslationsConnectEn {
 
 	/// en: 'Connecting…'
 	String get action_connecting => 'Connecting…';
+
+	/// en: 'Rescan'
+	String get action_rescan => 'Rescan';
+
+	/// en: 'Found on your network'
+	String get section_discovered => 'Found on your network';
+
+	/// en: 'Or enter manually'
+	String get section_manual => 'Or enter manually';
+
+	/// en: 'Nothing responded on port 7125 across your local subnet, and no Moonraker mDNS advertisements were seen either. Your printer may be on a different VLAN, behind a firewall, or using a non-default port - enter the IP/hostname below. '
+	String get empty_state => 'Nothing responded on port 7125 across your local subnet, and no\nMoonraker mDNS advertisements were seen either. Your printer may be\non a different VLAN, behind a firewall, or using a non-default\nport - enter the IP/hostname below.\n';
+
+	/// en: 'Looks like your $profile'
+	String match_confirmed({required Object profile}) => 'Looks like your ${profile}';
+
+	/// en: 'Probably your $profile'
+	String match_probable({required Object profile}) => 'Probably your ${profile}';
+
+	/// en: 'Does not look like $profile'
+	String match_miss({required Object profile}) => 'Does not look like ${profile}';
+
+	/// en: 'Checking...'
+	String get match_checking => 'Checking...';
+
+	/// en: 'installed by Deckhand as $profileId'
+	String reason_marker_with_id({required Object profileId}) => 'installed by Deckhand as ${profileId}';
+
+	/// en: 'Deckhand marker file present'
+	String get reason_marker_generic => 'Deckhand marker file present';
+
+	/// en: 'Klipper config uses `$object`'
+	String reason_object({required Object object}) => 'Klipper config uses `${object}`';
+
+	/// en: 'hostname `$hostname` matches profile'
+	String reason_hostname({required Object hostname}) => 'hostname `${hostname}` matches profile';
+
+	/// en: 'confirmed match for $profile$reason'
+	String semantics_confirmed({required Object profile, required Object reason}) => 'confirmed match for ${profile}${reason}';
+
+	/// en: 'probable match for $profile$reason'
+	String semantics_probable({required Object profile, required Object reason}) => 'probable match for ${profile}${reason}';
+
+	/// en: 'does not match $profile'
+	String semantics_miss({required Object profile}) => 'does not match ${profile}';
+
+	/// en: 'match status unknown'
+	String get semantics_unknown => 'match status unknown';
 }
 
 // Path: verify
@@ -251,8 +299,14 @@ class TranslationsWebuiEn {
 	/// en: 'Which web interface?'
 	String get title => 'Which web interface?';
 
-	/// en: 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other, or install both and switch per session. Neither is a power-user option: Moonraker is still installed; you can add a UI later. '
-	String get helper => 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n';
+	/// en: 'Web dashboards for controlling the printer from a browser. They both talk to the same backend (Moonraker), so you can install both and switch between them any time. '
+	String get helper => 'Web dashboards for controlling the printer from a browser. They\nboth talk to the same backend (Moonraker), so you can install\nboth and switch between them any time.\n';
+
+	/// en: 'Pick at least one. This step cannot be skipped.'
+	String get requirement_ok => 'Pick at least one. This step cannot be skipped.';
+
+	/// en: 'Pick at least one to continue.'
+	String get requirement_missing => 'Pick at least one to continue.';
 }
 
 // Path: kiauh
@@ -410,14 +464,119 @@ class TranslationsProgressEn {
 
 	// Translations
 
-	/// en: 'Installing…'
-	String get title_installing => 'Installing…';
+	/// en: 'Installing...'
+	String get title_installing => 'Installing...';
 
 	/// en: 'All done'
 	String get title_done => 'All done';
 
 	/// en: 'Something went wrong'
 	String get title_failed => 'Something went wrong';
+
+	/// en: 'Working...'
+	String get title_working => 'Working...';
+
+	/// en: 'Downloading image'
+	String get phase_os_download => 'Downloading image';
+
+	/// en: 'Writing image'
+	String get phase_flash_disk => 'Writing image';
+
+	/// en: 'Waiting for the printer to come back'
+	String get phase_wait_for_ssh => 'Waiting for the printer to come back';
+
+	/// en: 'Installing firmware'
+	String get phase_install_firmware => 'Installing firmware';
+
+	/// en: 'Installing Moonraker + web UI'
+	String get phase_install_stack => 'Installing Moonraker + web UI';
+
+	/// en: 'Copying Klipper extras'
+	String get phase_link_extras => 'Copying Klipper extras';
+
+	/// en: 'Installing the touchscreen UI'
+	String get phase_install_screen => 'Installing the touchscreen UI';
+
+	/// en: 'Flashing MCU firmware'
+	String get phase_flash_mcus => 'Flashing MCU firmware';
+
+	/// en: 'Cleaning up stock services'
+	String get phase_apply_services => 'Cleaning up stock services';
+
+	/// en: 'Cleaning up stock files'
+	String get phase_apply_files => 'Cleaning up stock files';
+
+	/// en: 'Backing up stock files'
+	String get phase_snapshot_paths => 'Backing up stock files';
+
+	/// en: 'Writing config'
+	String get phase_write_file => 'Writing config';
+
+	/// en: 'Marking this printer as Deckhand-managed'
+	String get phase_install_marker => 'Marking this printer as Deckhand-managed';
+
+	/// en: 'Verifying'
+	String get phase_verify => 'Verifying';
+
+	/// en: 'Running setup script'
+	String get phase_script => 'Running setup script';
+
+	/// en: 'Running remote commands'
+	String get phase_ssh_commands => 'Running remote commands';
+
+	/// en: 'Evaluating condition'
+	String get phase_conditional => 'Evaluating condition';
+
+	/// en: 'Finish'
+	String get action_finish => 'Finish';
+
+	/// en: 'Close'
+	String get action_close => 'Close';
+
+	/// en: 'Running...'
+	String get action_running => 'Running...';
+
+	/// en: 'One moment'
+	String get prompt_default_title => 'One moment';
+
+	/// en: 'Continue'
+	String get prompt_default_action => 'Continue';
+
+	/// en: 'Pick one'
+	String get choose_one_default_title => 'Pick one';
+
+	/// en: 'OK'
+	String get choose_one_ok => 'OK';
+
+	/// en: 'Pick the target disk'
+	String get disk_picker_title => 'Pick the target disk';
+
+	/// en: 'Cancel'
+	String get disk_picker_cancel => 'Cancel';
+
+	/// en: 'Use this disk'
+	String get disk_picker_confirm => 'Use this disk';
+
+	/// en: 'No removable disks found'
+	String get disk_picker_no_disks_title => 'No removable disks found';
+
+	/// en: 'Plug the printer eMMC into a USB adapter, then try again. Internal disks are dimmed here to prevent accidents. '
+	String get disk_picker_no_disks_body => 'Plug the printer eMMC into a USB adapter, then try again. Internal\ndisks are dimmed here to prevent accidents.\n';
+
+	/// en: 'Could not list disks'
+	String get disk_picker_list_error_title => 'Could not list disks';
+
+	/// en: 'Current step progress'
+	String get semantics_progress_label => 'Current step progress';
+
+	/// en: 'indeterminate'
+	String get semantics_progress_indeterminate => 'indeterminate';
+
+	/// en: '$percent percent'
+	String semantics_progress_percent({required Object percent}) => '${percent} percent';
+
+	/// en: 'Step execution log'
+	String get semantics_log_label => 'Step execution log';
 }
 
 // Path: done
@@ -445,6 +604,30 @@ class TranslationsSettingsEn {
 
 	/// en: 'Settings'
 	String get title => 'Settings';
+
+	/// en: 'Printer profiles'
+	String get section_profiles => 'Printer profiles';
+
+	/// en: 'Local profiles directory'
+	String get profiles_local_dir_label => 'Local profiles directory';
+
+	/// en: 'Point Deckhand at a checked-out copy of deckhand-builds on this machine instead of fetching main from GitHub. Useful for profile authoring. Leave empty to fetch from GitHub. '
+	String get profiles_local_dir_hint => 'Point Deckhand at a checked-out copy of deckhand-builds on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n';
+
+	/// en: 'Using local dir'
+	String get profiles_local_dir_active => 'Using local dir';
+
+	/// en: 'Fetching from GitHub'
+	String get profiles_local_dir_github => 'Fetching from GitHub';
+
+	/// en: 'Pick folder...'
+	String get profiles_local_dir_pick => 'Pick folder...';
+
+	/// en: 'Clear'
+	String get profiles_local_dir_clear => 'Clear';
+
+	/// en: 'Directory not found or unreadable.'
+	String get profiles_local_dir_invalid => 'Directory not found or unreadable.';
 }
 
 // Path: common
@@ -681,11 +864,27 @@ extension on Translations {
 			'pick_printer.action_back' => 'Back',
 			'pick_printer.registry_error' => ({required Object error}) => 'Failed to load printer registry: ${error}',
 			'connect.title' => 'Connect to your printer',
-			'connect.helper' => 'Enter your printer\'s IP address (or hostname). Deckhand will\nauthenticate using the default SSH credentials declared by this\nprinter\'s profile.\n',
+			'connect.helper' => 'Deckhand scans your LAN two ways: mDNS for printers that advertise\nMoonraker, and a TCP sweep of port 7125 across your local subnet.\nEach host is probed to see whether it matches your selected\nprofile - confirmed matches surface at the top.\n',
 			'connect.field_host' => 'Host or IP',
 			'connect.hint_host' => 'e.g. 192.168.1.50 or mkspi.local',
 			'connect.action_connect' => 'Connect',
 			'connect.action_connecting' => 'Connecting…',
+			'connect.action_rescan' => 'Rescan',
+			'connect.section_discovered' => 'Found on your network',
+			'connect.section_manual' => 'Or enter manually',
+			'connect.empty_state' => 'Nothing responded on port 7125 across your local subnet, and no\nMoonraker mDNS advertisements were seen either. Your printer may be\non a different VLAN, behind a firewall, or using a non-default\nport - enter the IP/hostname below.\n',
+			'connect.match_confirmed' => ({required Object profile}) => 'Looks like your ${profile}',
+			'connect.match_probable' => ({required Object profile}) => 'Probably your ${profile}',
+			'connect.match_miss' => ({required Object profile}) => 'Does not look like ${profile}',
+			'connect.match_checking' => 'Checking...',
+			'connect.reason_marker_with_id' => ({required Object profileId}) => 'installed by Deckhand as ${profileId}',
+			'connect.reason_marker_generic' => 'Deckhand marker file present',
+			'connect.reason_object' => ({required Object object}) => 'Klipper config uses `${object}`',
+			'connect.reason_hostname' => ({required Object hostname}) => 'hostname `${hostname}` matches profile',
+			'connect.semantics_confirmed' => ({required Object profile, required Object reason}) => 'confirmed match for ${profile}${reason}',
+			'connect.semantics_probable' => ({required Object profile, required Object reason}) => 'probable match for ${profile}${reason}',
+			'connect.semantics_miss' => ({required Object profile}) => 'does not match ${profile}',
+			'connect.semantics_unknown' => 'match status unknown',
 			'verify.title' => 'Verify your printer',
 			'verify.helper' => 'We\'ll run a few quick checks against your connected printer to\nconfirm this profile matches. Warnings don\'t block the wizard - you\ncan always proceed.\n',
 			'verify.action_continue' => 'Continue',
@@ -716,7 +915,9 @@ extension on Translations {
 			'firmware.title' => 'Pick your firmware',
 			'firmware.helper' => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master - more conservative.\n',
 			'webui.title' => 'Which web interface?',
-			'webui.helper' => 'Both Mainsail and Fluidd talk to Moonraker - pick one, the other,\nor install both and switch per session. Neither is a power-user\noption: Moonraker is still installed; you can add a UI later.\n',
+			'webui.helper' => 'Web dashboards for controlling the printer from a browser. They\nboth talk to the same backend (Moonraker), so you can install\nboth and switch between them any time.\n',
+			'webui.requirement_ok' => 'Pick at least one. This step cannot be skipped.',
+			'webui.requirement_missing' => 'Pick at least one to continue.',
 			'kiauh.title' => 'Install KIAUH?',
 			'screen_choice.title' => 'Pick a screen daemon',
 			'services.counter' => ({required Object current, required Object total}) => '${current} of ${total}',
@@ -730,12 +931,55 @@ extension on Translations {
 			'first_boot.title' => 'Put the eMMC back in the printer',
 			'first_boot_setup.title' => 'First boot setup',
 			'review.title' => 'Review your choices',
-			'progress.title_installing' => 'Installing…',
+			'progress.title_installing' => 'Installing...',
 			'progress.title_done' => 'All done',
 			'progress.title_failed' => 'Something went wrong',
+			'progress.title_working' => 'Working...',
+			'progress.phase_os_download' => 'Downloading image',
+			'progress.phase_flash_disk' => 'Writing image',
+			'progress.phase_wait_for_ssh' => 'Waiting for the printer to come back',
+			'progress.phase_install_firmware' => 'Installing firmware',
+			'progress.phase_install_stack' => 'Installing Moonraker + web UI',
+			'progress.phase_link_extras' => 'Copying Klipper extras',
+			'progress.phase_install_screen' => 'Installing the touchscreen UI',
+			'progress.phase_flash_mcus' => 'Flashing MCU firmware',
+			'progress.phase_apply_services' => 'Cleaning up stock services',
+			'progress.phase_apply_files' => 'Cleaning up stock files',
+			'progress.phase_snapshot_paths' => 'Backing up stock files',
+			'progress.phase_write_file' => 'Writing config',
+			'progress.phase_install_marker' => 'Marking this printer as Deckhand-managed',
+			'progress.phase_verify' => 'Verifying',
+			'progress.phase_script' => 'Running setup script',
+			'progress.phase_ssh_commands' => 'Running remote commands',
+			'progress.phase_conditional' => 'Evaluating condition',
+			'progress.action_finish' => 'Finish',
+			'progress.action_close' => 'Close',
+			'progress.action_running' => 'Running...',
+			'progress.prompt_default_title' => 'One moment',
+			'progress.prompt_default_action' => 'Continue',
+			'progress.choose_one_default_title' => 'Pick one',
+			'progress.choose_one_ok' => 'OK',
+			'progress.disk_picker_title' => 'Pick the target disk',
+			'progress.disk_picker_cancel' => 'Cancel',
+			'progress.disk_picker_confirm' => 'Use this disk',
+			'progress.disk_picker_no_disks_title' => 'No removable disks found',
+			'progress.disk_picker_no_disks_body' => 'Plug the printer eMMC into a USB adapter, then try again. Internal\ndisks are dimmed here to prevent accidents.\n',
+			'progress.disk_picker_list_error_title' => 'Could not list disks',
+			'progress.semantics_progress_label' => 'Current step progress',
+			'progress.semantics_progress_indeterminate' => 'indeterminate',
+			'progress.semantics_progress_percent' => ({required Object percent}) => '${percent} percent',
+			'progress.semantics_log_label' => 'Step execution log',
 			'done.title' => 'Setup complete',
 			'done.next_steps' => 'Next steps',
 			'settings.title' => 'Settings',
+			'settings.section_profiles' => 'Printer profiles',
+			'settings.profiles_local_dir_label' => 'Local profiles directory',
+			'settings.profiles_local_dir_hint' => 'Point Deckhand at a checked-out copy of deckhand-builds on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n',
+			'settings.profiles_local_dir_active' => 'Using local dir',
+			'settings.profiles_local_dir_github' => 'Fetching from GitHub',
+			'settings.profiles_local_dir_pick' => 'Pick folder...',
+			'settings.profiles_local_dir_clear' => 'Clear',
+			'settings.profiles_local_dir_invalid' => 'Directory not found or unreadable.',
 			'common.action_back' => 'Back',
 			'common.action_continue' => 'Continue',
 			'common.action_finish' => 'Finish',

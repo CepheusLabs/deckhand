@@ -44,13 +44,34 @@ pick_printer:
 connect:
   title: Connect to your printer
   helper: |
-    Enter your printer's IP address (or hostname). Deckhand will
-    authenticate using the default SSH credentials declared by this
-    printer's profile.
+    Deckhand scans your LAN two ways: mDNS for printers that advertise
+    Moonraker, and a TCP sweep of port 7125 across your local subnet.
+    Each host is probed to see whether it matches your selected
+    profile - confirmed matches surface at the top.
   field_host: Host or IP
   hint_host: e.g. 192.168.1.50 or mkspi.local
   action_connect: Connect
   action_connecting: Connecting…
+  action_rescan: Rescan
+  section_discovered: Found on your network
+  section_manual: Or enter manually
+  empty_state: |
+    Nothing responded on port 7125 across your local subnet, and no
+    Moonraker mDNS advertisements were seen either. Your printer may be
+    on a different VLAN, behind a firewall, or using a non-default
+    port - enter the IP/hostname below.
+  match_confirmed: Looks like your $profile
+  match_probable: Probably your $profile
+  match_miss: Does not look like $profile
+  match_checking: Checking...
+  reason_marker_with_id: installed by Deckhand as $profileId
+  reason_marker_generic: Deckhand marker file present
+  reason_object: Klipper config uses `$object`
+  reason_hostname: hostname `$hostname` matches profile
+  semantics_confirmed: "confirmed match for $profile$reason"
+  semantics_probable: "probable match for $profile$reason"
+  semantics_miss: "does not match $profile"
+  semantics_unknown: "match status unknown"
 
 verify:
   title: Verify your printer
@@ -121,9 +142,11 @@ firmware:
 webui:
   title: Which web interface?
   helper: |
-    Both Mainsail and Fluidd talk to Moonraker - pick one, the other,
-    or install both and switch per session. Neither is a power-user
-    option: Moonraker is still installed; you can add a UI later.
+    Web dashboards for controlling the printer from a browser. They
+    both talk to the same backend (Moonraker), so you can install
+    both and switch between them any time.
+  requirement_ok: Pick at least one. This step cannot be skipped.
+  requirement_missing: Pick at least one to continue.
 
 kiauh:
   title: Install KIAUH?
@@ -163,9 +186,48 @@ review:
   title: Review your choices
 
 progress:
-  title_installing: Installing…
+  title_installing: Installing...
   title_done: All done
   title_failed: Something went wrong
+  title_working: Working...
+  # Phase-aware titles keyed by step kind. The progress screen looks
+  # up the currently-running step's kind and picks the matching title.
+  phase_os_download: Downloading image
+  phase_flash_disk: Writing image
+  phase_wait_for_ssh: Waiting for the printer to come back
+  phase_install_firmware: Installing firmware
+  phase_install_stack: Installing Moonraker + web UI
+  phase_link_extras: Copying Klipper extras
+  phase_install_screen: Installing the touchscreen UI
+  phase_flash_mcus: Flashing MCU firmware
+  phase_apply_services: Cleaning up stock services
+  phase_apply_files: Cleaning up stock files
+  phase_snapshot_paths: Backing up stock files
+  phase_write_file: Writing config
+  phase_install_marker: Marking this printer as Deckhand-managed
+  phase_verify: Verifying
+  phase_script: Running setup script
+  phase_ssh_commands: Running remote commands
+  phase_conditional: Evaluating condition
+  action_finish: Finish
+  action_close: Close
+  action_running: Running...
+  prompt_default_title: One moment
+  prompt_default_action: Continue
+  choose_one_default_title: Pick one
+  choose_one_ok: OK
+  disk_picker_title: Pick the target disk
+  disk_picker_cancel: Cancel
+  disk_picker_confirm: Use this disk
+  disk_picker_no_disks_title: No removable disks found
+  disk_picker_no_disks_body: |
+    Plug the printer eMMC into a USB adapter, then try again. Internal
+    disks are dimmed here to prevent accidents.
+  disk_picker_list_error_title: Could not list disks
+  semantics_progress_label: Current step progress
+  semantics_progress_indeterminate: indeterminate
+  semantics_progress_percent: $percent percent
+  semantics_log_label: Step execution log
 
 done:
   title: Setup complete
@@ -173,6 +235,17 @@ done:
 
 settings:
   title: Settings
+  section_profiles: Printer profiles
+  profiles_local_dir_label: Local profiles directory
+  profiles_local_dir_hint: |
+    Point Deckhand at a checked-out copy of deckhand-builds on this
+    machine instead of fetching main from GitHub. Useful for profile
+    authoring. Leave empty to fetch from GitHub.
+  profiles_local_dir_active: Using local dir
+  profiles_local_dir_github: Fetching from GitHub
+  profiles_local_dir_pick: Pick folder...
+  profiles_local_dir_clear: Clear
+  profiles_local_dir_invalid: Directory not found or unreadable.
 
 common:
   action_back: Back
