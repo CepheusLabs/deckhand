@@ -15,6 +15,7 @@ class WebuiScreen extends ConsumerStatefulWidget {
 
 class _WebuiScreenState extends ConsumerState<WebuiScreen> {
   final _selected = <String>{};
+  bool _seeded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -23,18 +24,63 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
     final choices = ((webui['choices'] as List?) ?? const []).cast<Map>();
     final defaultChoices = ((webui['default_choices'] as List?) ?? const [])
         .cast<String>();
-    if (_selected.isEmpty) _selected.addAll(defaultChoices);
+
+    // Seed once on first build so the user's own toggles aren't clobbered
+    // by the defaults after they clear a checkbox.
+    if (!_seeded) {
+      _selected.addAll(defaultChoices);
+      _seeded = true;
+    }
+
+    final theme = Theme.of(context);
+    final hasSelection = _selected.isNotEmpty;
 
     return WizardScaffold(
       stepper: const DeckhandStepper(),
       title: 'Which web interface?',
       helperText:
-          'Both Mainsail and Fluidd talk to Moonraker - pick one, the other, '
-          'or install both and switch per session. Neither is a power-user '
-          'option: Moonraker is still installed; you can add a UI later.',
+          'Web dashboards for controlling the printer from a browser. They '
+          'both talk to the same backend (Moonraker), so you can install '
+          'both and switch between them any time.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: hasSelection
+                  ? theme.colorScheme.surfaceContainerHighest
+                  : theme.colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  hasSelection
+                      ? Icons.info_outline
+                      : Icons.error_outline,
+                  size: 18,
+                  color: hasSelection
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hasSelection
+                        ? 'Pick at least one. This step cannot be skipped.'
+                        : 'Pick at least one to continue.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: hasSelection
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           for (final raw in choices)
             CheckboxListTile(
               value: _selected.contains(raw['id']),
@@ -49,24 +95,36 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
               title: Text(
                 raw['display_name'] as String? ?? raw['id'] as String,
               ),
-              subtitle: Text(
-                '${raw['release_repo']} - port ${raw['default_port']}',
-              ),
+              subtitle: Text(_userFacingBlurb(raw)),
             ),
         ],
       ),
       primaryAction: WizardAction(
         label: 'Continue',
-        onPressed: () async {
-          await ref
-              .read(wizardControllerProvider)
-              .setDecision('webui', _selected.toList());
-          if (context.mounted) context.go('/kiauh');
-        },
+        onPressed: hasSelection
+            ? () async {
+                await ref
+                    .read(wizardControllerProvider)
+                    .setDecision('webui', _selected.toList());
+                if (context.mounted) context.go('/kiauh');
+              }
+            : null,
       ),
       secondaryActions: [
         WizardAction(label: 'Back', onPressed: () => context.go('/firmware')),
       ],
     );
+  }
+
+  /// Prefer a profile-supplied `description`. If absent, fall back to a
+  /// terse "<display_name> - port <n>" line so at least the reader knows
+  /// which service we're installing. Per-id prose belongs in the
+  /// profile YAML, not in this widget.
+  String _userFacingBlurb(Map raw) {
+    final desc = raw['description'] as String?;
+    if (desc != null && desc.trim().isNotEmpty) return desc.trim();
+    final port = raw['default_port'];
+    final name = raw['display_name'] as String? ?? raw['id'] as String;
+    return port == null ? name : '$name on port $port';
   }
 }

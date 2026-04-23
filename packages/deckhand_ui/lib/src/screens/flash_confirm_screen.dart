@@ -1,3 +1,4 @@
+import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -78,8 +79,15 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
         onPressed: _backedUp && _understand
             ? () async {
                 final ok = await _finalConfirm(context, diskId ?? '?');
-                if (ok == true && context.mounted)
-                  context.go('/flash-progress');
+                if (ok == true && context.mounted) {
+                  // Kick off the unified progress screen - it owns the
+                  // full fresh_flash pipeline (download, flash, first-
+                  // boot wait) plus any subsequent profile steps.
+                  ref
+                      .read(wizardControllerProvider)
+                      .setFlow(WizardFlow.freshFlash);
+                  context.go('/progress');
+                }
               }
             : null,
       ),

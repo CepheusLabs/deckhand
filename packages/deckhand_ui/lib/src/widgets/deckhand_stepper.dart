@@ -57,15 +57,18 @@ class DeckhandStepper extends ConsumerWidget {
           const _StepEntry(label: 'Disk', routes: ['/flash-target']),
           const _StepEntry(label: 'Image', routes: ['/choose-os']),
           const _StepEntry(label: 'Confirm', routes: ['/flash-confirm']),
-          const _StepEntry(label: 'Write', routes: ['/flash-progress']),
-          const _StepEntry(label: 'Reboot', routes: ['/first-boot']),
+          // Single unified progress screen owns write, reboot wait, and
+          // post-boot setup steps. Older routes kept as aliases below.
+          const _StepEntry(
+            label: 'Install',
+            routes: ['/progress', '/flash-progress', '/first-boot'],
+          ),
           const _StepEntry(label: 'User', routes: ['/first-boot-setup']),
           const _StepEntry(label: 'Firmware', routes: ['/firmware']),
           const _StepEntry(label: 'Web UI', routes: ['/webui']),
           const _StepEntry(label: 'KIAUH', routes: ['/kiauh']),
           const _StepEntry(label: 'Screen', routes: ['/screen-choice']),
           const _StepEntry(label: 'Review', routes: ['/review']),
-          const _StepEntry(label: 'Install', routes: ['/progress']),
           const _StepEntry(label: 'Done', routes: ['/done']),
         ];
       case WizardFlow.none:

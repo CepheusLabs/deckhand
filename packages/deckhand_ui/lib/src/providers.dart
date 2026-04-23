@@ -29,6 +29,12 @@ final securityServiceProvider = Provider<SecurityService>(
   (_) => _throwUnimplemented('securityServiceProvider'),
 );
 
+/// Optional: raw-device writes. Null when elevation is unavailable (e.g.
+/// early dev builds before the helper binary ships alongside the app).
+final elevatedHelperServiceProvider = Provider<ElevatedHelperService?>(
+  (_) => null,
+);
+
 final wizardControllerProvider = Provider<WizardController>((ref) {
   final controller = WizardController(
     profiles: ref.watch(profileServiceProvider),
@@ -38,6 +44,7 @@ final wizardControllerProvider = Provider<WizardController>((ref) {
     moonraker: ref.watch(moonrakerServiceProvider),
     upstream: ref.watch(upstreamServiceProvider),
     security: ref.watch(securityServiceProvider),
+    elevatedHelper: ref.watch(elevatedHelperServiceProvider),
   );
   ref.onDispose(controller.dispose);
   return controller;

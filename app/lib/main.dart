@@ -49,6 +49,9 @@ Future<void> main() async {
           SidecarUpstreamService(sidecar: sidecar),
         ),
         securityServiceProvider.overrideWithValue(DefaultSecurityService()),
+        elevatedHelperServiceProvider.overrideWithValue(
+          ProcessElevatedHelperService(helperPath: _resolveElevatedHelperPath()),
+        ),
       ],
       child: const WizardShell(),
     ),
@@ -60,4 +63,11 @@ String _resolveSidecarPath() {
   return Platform.isWindows
       ? p.join(dir, 'deckhand-sidecar.exe')
       : p.join(dir, 'deckhand-sidecar');
+}
+
+String _resolveElevatedHelperPath() {
+  final dir = p.dirname(Platform.resolvedExecutable);
+  return Platform.isWindows
+      ? p.join(dir, 'deckhand-elevated-helper.exe')
+      : p.join(dir, 'deckhand-elevated-helper');
 }
