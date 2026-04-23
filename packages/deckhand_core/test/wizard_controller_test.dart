@@ -817,6 +817,123 @@ void main() {
       expect(rm, contains('.deckhand-pre-1776'));
       expect(rm, contains('.meta.json'));
     });
+
+    test('pruneBackups batches into one rm per privilege bucket', () async {
+      final ssh = FakeSsh();
+      final controller = newController(
+        profileJson: baseProfileJson(),
+        ssh: ssh,
+      );
+      await controller.loadProfile('test-printer');
+      await controller.connectSsh(host: '127.0.0.1');
+      // Seed three backups: two old + system (one rm call with sudo),
+      // one old + in-home (one rm call without sudo), plus one fresh
+      // (should NOT be deleted).
+      final old = DateTime.now().subtract(const Duration(days: 60));
+      final fresh = DateTime.now().subtract(const Duration(days: 5));
+      controller.printerStateForTesting = PrinterState(
+        services: const {},
+        files: const {},
+        paths: const {},
+        stackInstalls: const {},
+        screenInstalls: const {},
+        python311Installed: false,
+        deckhandBackups: [
+          DeckhandBackup(
+            originalPath: '/etc/apt/sources.list',
+            backupPath: '/etc/apt/sources.list.deckhand-pre-1',
+            createdAt: old,
+          ),
+          DeckhandBackup(
+            originalPath: '/etc/default/grub',
+            backupPath: '/etc/default/grub.deckhand-pre-2',
+            createdAt: old,
+          ),
+          DeckhandBackup(
+            originalPath: '/home/root/printer.cfg',
+            backupPath: '/home/root/printer.cfg.deckhand-pre-3',
+            createdAt: old,
+          ),
+          DeckhandBackup(
+            originalPath: '/etc/hostname',
+            backupPath: '/etc/hostname.deckhand-pre-4',
+            createdAt: fresh,
+          ),
+        ],
+        probedAt: DateTime.now(),
+      );
+
+      final n = await controller.pruneBackups();
+      expect(n, 3);
+
+      // Exactly two rm commands: sudo-batch and plain-batch.
+      final rms = ssh.steps.where((c) => c.contains('rm -f')).toList();
+      expect(rms, hasLength(2));
+      expect(
+        rms.any((c) => c.contains('/etc/apt/sources.list')),
+        isTrue,
+      );
+      expect(
+        rms.any((c) => c.contains('/etc/default/grub')),
+        isTrue,
+      );
+      expect(
+        rms.any((c) => c.contains('/home/root/printer.cfg')),
+        isTrue,
+      );
+      expect(
+        rms.any((c) => c.contains('/etc/hostname')),
+        isFalse,
+        reason: 'Fresh backup must survive the prune',
+      );
+      // Sidecars included in the prune.
+      expect(
+        rms.any((c) => c.contains('.meta.json')),
+        isTrue,
+      );
+    });
+
+    test('pruneBackups with nothing to do returns 0 and does not touch ssh',
+        () async {
+      final ssh = FakeSsh();
+      final controller = newController(
+        profileJson: baseProfileJson(),
+        ssh: ssh,
+      );
+      await controller.loadProfile('test-printer');
+      await controller.connectSsh(host: '127.0.0.1');
+      // No backups at all.
+      final beforeCount = ssh.steps.length;
+      final n = await controller.pruneBackups();
+      expect(n, 0);
+      // No new ssh.run calls beyond whatever the probe did.
+      expect(ssh.steps.length, beforeCount);
+    });
+
+    test('readBackupContent fetches via head + sudo for system paths',
+        () async {
+      final ssh = FakeSsh()
+        ..nextRun = const SshCommandResult(
+          stdout: 'file content here',
+          stderr: '',
+          exitCode: 0,
+        );
+      final controller = newController(
+        profileJson: baseProfileJson(),
+        ssh: ssh,
+      );
+      await controller.loadProfile('test-printer');
+      await controller.connectSsh(host: '127.0.0.1');
+      final content = await controller.readBackupContent(
+        const DeckhandBackup(
+          originalPath: '/etc/apt/sources.list',
+          backupPath: '/etc/apt/sources.list.deckhand-pre-1',
+        ),
+      );
+      expect(content, 'file content here');
+      final cmd = ssh.steps.firstWhere((c) => c.contains('head -c'));
+      expect(cmd, contains('head -c 262144'));
+    });
   });
 
   group('WizardController._runInstallMarker', () {

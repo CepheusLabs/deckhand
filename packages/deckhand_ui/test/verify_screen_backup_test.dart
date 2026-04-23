@@ -59,6 +59,110 @@ void main() {
     );
 
     testWidgets(
+      'legacy backups (no sidecar metadata) render in their own section',
+      (tester) async {
+        final controller = stubWizardController(
+          profileJson: testProfileJson(),
+        );
+        await controller.loadProfile('test-printer');
+        controller.setFlow(WizardFlow.stockKeep);
+        controller.printerStateForTesting = PrinterState(
+          services: const {},
+          files: const {},
+          paths: const {},
+          stackInstalls: const {},
+          screenInstalls: const {},
+          python311Installed: false,
+          deckhandBackups: const [
+            DeckhandBackup(
+              originalPath: '/etc/fstab',
+              backupPath: '/etc/fstab.deckhand-pre-1776910000000',
+              // No profileId - this is a legacy backup.
+            ),
+          ],
+          probedAt: null,
+        );
+        // Use force probedAt so the screen thinks probe finished.
+        controller.printerStateForTesting = PrinterState(
+          services: const {},
+          files: const {},
+          paths: const {},
+          stackInstalls: const {},
+          screenInstalls: const {},
+          python311Installed: false,
+          deckhandBackups: const [
+            DeckhandBackup(
+              originalPath: '/etc/fstab',
+              backupPath: '/etc/fstab.deckhand-pre-1776910000000',
+            ),
+          ],
+          probedAt: null,
+        );
+        await tester.pumpWidget(testHarness(
+          controller: controller,
+          child: const VerifyScreen(),
+          initialLocation: '/verify',
+        ));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Legacy backups without profile metadata'),
+          findsOneWidget,
+        );
+        expect(find.text('/etc/fstab'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Delete button opens a confirm dialog and does nothing if cancelled',
+      (tester) async {
+        final controller = stubWizardController(
+          profileJson: testProfileJson(),
+        );
+        await controller.loadProfile('test-printer');
+        controller.setFlow(WizardFlow.stockKeep);
+        controller.printerStateForTesting = PrinterState(
+          services: const {},
+          files: const {},
+          paths: const {},
+          stackInstalls: const {},
+          screenInstalls: const {},
+          python311Installed: false,
+          deckhandBackups: [
+            DeckhandBackup(
+              originalPath: '/etc/apt/sources.list',
+              backupPath: '/etc/apt/sources.list.deckhand-pre-test-printer-1',
+              profileId: 'test-printer',
+              createdAt: DateTime(2026, 4, 22),
+            ),
+          ],
+          probedAt: DateTime.now(),
+        );
+        await tester.pumpWidget(testHarness(
+          controller: controller,
+          child: const VerifyScreen(),
+          initialLocation: '/verify',
+        ));
+        await tester.pumpAndSettle();
+
+        // Click Delete: confirm dialog pops up.
+        await tester.tap(find.text('Delete').first);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Delete this backup?'),
+          findsOneWidget,
+        );
+        // Cancel.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        // Dialog dismissed, original view restored, backup still in
+        // the list (the stub SSH would have returned success either
+        // way - this is a cancellation check, not a delete check).
+        expect(find.textContaining('Delete this backup?'), findsNothing);
+        expect(find.text('/etc/apt/sources.list'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'foreign-profile backups render without a Restore button',
       (tester) async {
         final controller = stubWizardController(

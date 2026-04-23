@@ -141,6 +141,41 @@ void main() {
         // Explicit below-3.14 case still true.
         expect(dsl.evaluate('os_python_below("3.14")', e), isTrue);
       });
+
+      test('handles garbage probe data (unknown / empty / banner)', () {
+        for (final garbage in ['unknown', '', 'not a version']) {
+          final e = env(
+            {'probe.python_default': garbage},
+            profile: {
+              'os': {
+                'stock': {'python': '3.7.3'},
+              },
+            },
+          );
+          // Falls through to profile.os.stock.python = 3.7.3 < 3.9.
+          expect(
+            dsl.evaluate('os_python_below("3.9")', e),
+            isTrue,
+            reason: 'probe value "$garbage" should fall through to '
+                'profile-declared stock python',
+          );
+        }
+      });
+
+      test('accepts "Python 3.13" banner form', () {
+        final e = env({'probe.python_default': 'Python 3.13'});
+        expect(dsl.evaluate('os_python_below("3.9")', e), isFalse);
+        expect(dsl.evaluate('os_python_below("3.14")', e), isTrue);
+      });
+
+      test('profile os.stock.python also tolerates banner form', () {
+        final e = env({}, profile: {
+          'os': {
+            'stock': {'python': 'Python 3.7.3'},
+          },
+        });
+        expect(dsl.evaluate('os_python_below("3.9")', e), isTrue);
+      });
     });
 
     group('os_codename_is', () {

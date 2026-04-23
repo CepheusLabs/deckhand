@@ -279,6 +279,10 @@ class WizardController {
   /// the printer. Used by verify_screen's "Prune old backups" action.
   /// Returns the number of backup files removed (excluding sidecar
   /// metadata which is counted as part of the same logical backup).
+  ///
+  /// Performance: deletes every victim in ONE ssh.run call (a single
+  /// `rm -f <a> <a.meta.json> <b> ...`), then re-probes once. Calling
+  /// [deleteBackup] per-victim would fire one probe per deletion.
   Future<int> pruneBackups({
     Duration olderThan = const Duration(days: 30),
   }) async {
@@ -289,9 +293,41 @@ class WizardController {
       if (age == null) return false;
       return age.isBefore(cutoff);
     }).toList();
+    if (victims.isEmpty) return 0;
+    // Split into sudo-required and plain batches so we don't escalate
+    // when we don't need to (and don't fail when sudo is required).
+    final sudoBatch = <String>[];
+    final plainBatch = <String>[];
     for (final b in victims) {
-      await deleteBackup(b);
+      final paths = [
+        _shellQuote(b.backupPath),
+        _shellQuote('${b.backupPath}.meta.json'),
+      ];
+      if (_looksLikeSystemPath(_session!, b.backupPath)) {
+        sudoBatch.addAll(paths);
+      } else {
+        plainBatch.addAll(paths);
+      }
     }
+    if (plainBatch.isNotEmpty) {
+      final res = await _runSsh('rm -f ${plainBatch.join(" ")}');
+      if (!res.success) {
+        throw StepExecutionException(
+          'Could not prune user-owned backups',
+          stderr: res.stderr,
+        );
+      }
+    }
+    if (sudoBatch.isNotEmpty) {
+      final res = await _runSsh('sudo rm -f ${sudoBatch.join(" ")}');
+      if (!res.success) {
+        throw StepExecutionException(
+          'Could not prune root-owned backups',
+          stderr: res.stderr,
+        );
+      }
+    }
+    await _refreshPrinterState(force: true);
     return victims.length;
   }
 
@@ -1236,31 +1272,21 @@ class WizardController {
       );
     }
 
-    // Stage + mv (same pattern as _runWriteFile). Tempfile stays
-    // under the user's control; no elevation needed for the Moonraker
-    // config root.
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final tmpLocal = p.join(Directory.systemTemp.path, 'deckhand-marker-$ts.tmp');
-    final remoteTmp = '/tmp/deckhand-marker-$ts.tmp';
-    await File(tmpLocal).writeAsString(json);
-    try {
-      await ssh.upload(_requireSession(), tmpLocal, remoteTmp);
-      final res = await _runSsh(
-        'mv ${_shellQuote(remoteTmp)} ${_shellQuote(target)}',
-      );
-      if (!res.success) {
-        await _runSsh('rm -f ${_shellQuote(remoteTmp)}');
-        throw StepExecutionException(
-          'could not write marker to $target',
-          stderr: res.stderr,
-        );
-      }
-      _log(step, '[marker] wrote $target (${json.length} bytes)');
-    } finally {
-      try {
-        await File(tmpLocal).delete();
-      } catch (_) {}
-    }
+    // Route through _runWriteFile so `deckhand.json` gets the same
+    // auto-backup + metadata-sidecar treatment as every other
+    // destructive write. Users who hand-edited the marker (to add
+    // notes, pin a specific deckhand_schema, etc.) get a byte-exact
+    // rollback.
+    final syntheticStep = <String, dynamic>{
+      'id': step['id'] as String? ?? 'install_marker',
+      'kind': 'write_file',
+      'target': target,
+      'content': json,
+      'mode': '0644',
+      'backup': step['backup'] as bool? ?? true,
+    };
+    await _runWriteFile(syntheticStep);
+    _log(step, '[marker] wrote $target (${json.length} bytes)');
   }
 
   /// For `choose_one` / `disk_picker` steps: if a pre-wizard screen

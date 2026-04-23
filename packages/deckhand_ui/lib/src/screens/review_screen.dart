@@ -27,7 +27,11 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final controller = ref.watch(wizardControllerProvider);
     final state = controller.state;
     final profile = controller.profile;
-    final plan = _buildMutationPlan(profile, state.flow);
+    final plan = _buildMutationPlan(
+      profile: profile,
+      flow: state.flow,
+      decisions: state.decisions,
+    );
     final theme = Theme.of(context);
 
     return WizardScaffold(
@@ -131,6 +135,15 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   }
 }
 
+/// One row inside a plan section. [subtle] dims the row - used for
+/// conditional-gate headers so they visually separate from the
+/// concrete paths that follow.
+class _PlanItem {
+  const _PlanItem({required this.label, this.subtle = false});
+  final String label;
+  final bool subtle;
+}
+
 /// A grouped set of paths the flow will touch, by category.
 class _PlanSection {
   const _PlanSection({
@@ -140,7 +153,7 @@ class _PlanSection {
   });
   final String title;
   final IconData icon;
-  final List<String> items;
+  final List<_PlanItem> items;
 }
 
 class _MutationPlan {
@@ -148,65 +161,181 @@ class _MutationPlan {
   final List<_PlanSection> sections;
 }
 
-_MutationPlan _buildMutationPlan(PrinterProfile? profile, WizardFlow flow) {
+Map<String, dynamic>? _lookupStackCfg(PrinterProfile profile, String name) {
+  final stack = profile.stack;
+  switch (name) {
+    case 'moonraker':
+      return stack.moonraker;
+    case 'kiauh':
+      return stack.kiauh;
+    case 'crowsnest':
+      return stack.crowsnest;
+    default:
+      final choices =
+          ((stack.webui?['choices'] as List?) ?? const []).cast<Map>();
+      for (final c in choices) {
+        if ((c['id'] as String?) == name) return c.cast<String, dynamic>();
+      }
+      return null;
+  }
+}
+
+_MutationPlan _buildMutationPlan({
+  required PrinterProfile? profile,
+  required WizardFlow flow,
+  required Map<String, Object> decisions,
+}) {
   if (profile == null) return const _MutationPlan([]);
   final flowSpec = flow == WizardFlow.freshFlash
       ? profile.flows.freshFlash
       : profile.flows.stockKeep;
   if (flowSpec == null) return const _MutationPlan([]);
 
-  final writes = <String>[];
-  final snapshots = <String>[];
-  final deletes = <String>[];
-  final clones = <String>[];
-  final scripts = <String>[];
-  final diskWrites = <String>[];
+  final writes = <_PlanItem>[];
+  final snapshots = <_PlanItem>[];
+  final deletes = <_PlanItem>[];
+  final clones = <_PlanItem>[];
+  final scripts = <_PlanItem>[];
+  final diskWrites = <_PlanItem>[];
 
-  void walk(List<dynamic> steps) {
+  /// Resolve `{{path.like.this}}` references in a profile string
+  /// against the same decisions + profile the wizard controller would
+  /// use at runtime. Best-effort: missing keys render the brace
+  /// expression unchanged so the user sees what's unresolved.
+  String resolve(String template) {
+    return template.replaceAllMapped(RegExp(r'\{\{([^}]+)\}\}'), (m) {
+      final key = m.group(1)!.trim();
+      if (key.startsWith('decisions.')) {
+        final v = decisions[key.substring('decisions.'.length)];
+        return v?.toString() ?? '{{$key}}';
+      }
+      if (key.startsWith('profile.')) {
+        final path = key.substring('profile.'.length).split('.');
+        Object? cur = profile.raw;
+        for (final p in path) {
+          if (cur is Map) {
+            cur = cur[p];
+          } else {
+            cur = null;
+            break;
+          }
+        }
+        return cur?.toString() ?? '{{$key}}';
+      }
+      if (key == 'firmware.install_path') {
+        final fwId = decisions['firmware']?.toString();
+        final fw = profile.firmware.choices
+            .firstWhere(
+              (c) => c.id == fwId,
+              orElse: () => profile.firmware.choices.isEmpty
+                  ? const FirmwareChoice(
+                      id: '', displayName: '', repo: '', ref: '')
+                  : profile.firmware.choices.first,
+            );
+        return fw.installPath ?? '{{$key}}';
+      }
+      if (key == 'stack.webui.selected') {
+        final list = decisions['webui'];
+        if (list is List) return list.join(', ');
+        return list?.toString() ?? '{{$key}}';
+      }
+      return '{{$key}}';
+    });
+  }
+
+  /// Whether this step is inside a conditional wrapper - gets a
+  /// "(maybe)" tag in the preview so users know the step only fires
+  /// when the condition evaluates true.
+  void walk(List<dynamic> steps, {bool conditional = false}) {
+    final tag = conditional ? ' (maybe, conditional)' : '';
     for (final raw in steps) {
       if (raw is! Map) continue;
       final step = raw.cast<String, dynamic>();
       switch (step['kind']) {
         case 'write_file':
           final target = step['target'] as String?;
-          if (target != null) writes.add(target);
+          if (target != null) {
+            writes.add(_PlanItem(label: resolve(target) + tag));
+          }
         case 'install_marker':
-          final dir = step['target_dir'] as String?
-              ?? '~/printer_data/config';
+          final dir =
+              step['target_dir'] as String? ?? '~/printer_data/config';
           final filename = step['filename'] as String? ?? 'deckhand.json';
-          writes.add('$dir/$filename');
+          writes.add(_PlanItem(label: resolve('$dir/$filename') + tag));
         case 'snapshot_paths':
-          final ids = ((step['paths'] as List?) ?? const []).cast<String>();
+          final ids =
+              ((step['paths'] as List?) ?? const []).cast<String>();
           for (final id in ids) {
             final p = profile.stockOs.paths.firstWhere(
               (x) => x.id == id,
               orElse: () => StockPath(id: id, path: id, action: ''),
             );
-            snapshots.add(p.path);
+            snapshots.add(_PlanItem(label: p.path + tag));
           }
         case 'apply_files':
+          // Only list files the user CHOSE to delete (decisions say
+          // `delete`, or the profile default is `delete` and the
+          // user hasn't overridden). Everything else stays.
           for (final f in profile.stockOs.files) {
-            for (final p in f.paths) deletes.add(p);
+            final decided =
+                decisions['file.${f.id}'] as String? ?? f.defaultAction;
+            if (decided != 'delete') continue;
+            for (final p in f.paths) {
+              deletes.add(_PlanItem(label: '${f.id}: $p$tag'));
+            }
           }
         case 'install_firmware':
-          final fwId = step['id'] as String? ?? 'firmware';
-          clones.add('firmware: $fwId');
+          final fwId = decisions['firmware']?.toString() ?? '(unchosen)';
+          final fw = profile.firmware.choices.firstWhere(
+            (c) => c.id == fwId,
+            orElse: () => profile.firmware.choices.isEmpty
+                ? const FirmwareChoice(
+                    id: '', displayName: '', repo: '', ref: '')
+                : profile.firmware.choices.first,
+          );
+          clones.add(_PlanItem(
+            label: 'firmware: ${fw.displayName} '
+                '(${fw.repo}@${fw.ref}) -> ${fw.installPath ?? "?"}$tag',
+          ));
         case 'install_stack':
           final comps =
               ((step['components'] as List?) ?? const []).cast<String>();
-          for (final c in comps) clones.add('stack: $c');
+          for (final c in comps) {
+            final resolved = resolve(c);
+            final cfg = _lookupStackCfg(profile, resolved);
+            if (cfg == null) {
+              clones.add(_PlanItem(label: 'stack: $resolved$tag'));
+            } else {
+              final path = cfg['install_path'] as String? ?? '?';
+              final repo = cfg['repo'] as String? ?? '?';
+              clones.add(_PlanItem(
+                label: 'stack: $resolved ($repo) -> $path$tag',
+              ));
+            }
+          }
         case 'link_extras':
           final srcs =
               ((step['sources'] as List?) ?? const []).cast<String>();
-          for (final s in srcs) clones.add('klippy extras <- $s');
+          for (final s in srcs) {
+            clones.add(_PlanItem(label: 'klippy extras <- $s$tag'));
+          }
         case 'script':
           final path = step['path'] as String?;
-          if (path != null) scripts.add(path);
+          if (path != null) scripts.add(_PlanItem(label: path + tag));
         case 'flash_disk':
-          diskWrites.add('raw image write to user-chosen disk');
+          final disk = decisions['flash.disk']?.toString() ?? '(unchosen)';
+          diskWrites.add(_PlanItem(label: 'raw image write to $disk$tag'));
         case 'conditional':
+          final when = step['when'] as String?;
           final then = (step['then'] as List?) ?? const [];
-          walk(then);
+          // Label the gate itself so users see there's branching.
+          scripts.add(
+            _PlanItem(
+              label: '[gate: when $when] then...',
+              subtle: true,
+            ),
+          );
+          walk(then, conditional: true);
       }
     }
   }
@@ -267,22 +396,30 @@ class _PlanSectionWidget extends StatelessWidget {
               Icon(section.icon,
                   size: 16, color: theme.colorScheme.onTertiaryContainer),
               const SizedBox(width: 6),
-              Text(
-                '${section.title} (${section.items.length})',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.onTertiaryContainer,
+              Expanded(
+                child: Text(
+                  '${section.title} (${section.items.length})',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          for (final i in section.items)
+          for (final item in section.items)
             Padding(
               padding: const EdgeInsets.only(left: 22, top: 2),
               child: Text(
-                i,
+                item.label,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
-                  color: theme.colorScheme.onTertiaryContainer,
+                  color: item.subtle
+                      ? theme.colorScheme.onTertiaryContainer
+                          .withValues(alpha: 0.65)
+                      : theme.colorScheme.onTertiaryContainer,
+                  fontStyle:
+                      item.subtle ? FontStyle.italic : FontStyle.normal,
                 ),
               ),
             ),

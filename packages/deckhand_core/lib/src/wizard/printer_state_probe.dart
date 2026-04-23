@@ -297,8 +297,16 @@ class PrinterStateProbe {
     //
     // Wire format: `backup\t<original>:::<backup>:::<meta-json-or-empty>`
     lines.add(
-      "find /etc /home /opt -maxdepth 7 -name '*.deckhand-pre-*' "
-      "-not -name '*.meta.json' 2>/dev/null | "
+      // Search every location where a Deckhand-written file could
+      // live. `/etc` + `/home` + `/opt` covers most stacks; adding
+      // `/var` (for lib / cache / log configs that profiles may
+      // rewrite), `/srv` (some printer images use it for Moonraker
+      // data), and `/root` (if the SSH user escalates and ends up
+      // writing config under root's home by mistake). -maxdepth 8
+      // reaches typical deeply-nested `printer_data/config/macros/
+      // category/foo.cfg` trees.
+      "find /etc /home /opt /var /srv /root -maxdepth 8 "
+      "-name '*.deckhand-pre-*' -not -name '*.meta.json' 2>/dev/null | "
       "while IFS= read -r f; do "
       "  orig=\"\$(printf '%s' \"\$f\" | "
       "    sed 's/\\.deckhand-pre-[A-Za-z0-9_-][A-Za-z0-9_-]*-[0-9][0-9]*\$//' | "

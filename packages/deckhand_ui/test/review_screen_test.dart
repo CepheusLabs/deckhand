@@ -1,0 +1,163 @@
+import 'package:deckhand_core/deckhand_core.dart';
+import 'package:deckhand_ui/src/screens/review_screen.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers.dart';
+
+void main() {
+  group('ReviewScreen pre-run preview', () {
+    Future<WizardController> buildController({
+      required List<Map<String, dynamic>> steps,
+      Map<String, Object> decisions = const {},
+      Map<String, dynamic>? extraProfile,
+    }) async {
+      final profileJson = {
+        ...testProfileJson(),
+        if (extraProfile != null) ...extraProfile,
+        'flows': {
+          'stock_keep': {'enabled': true, 'steps': steps},
+        },
+      };
+      final controller = stubWizardController(profileJson: profileJson);
+      await controller.loadProfile('test-printer');
+      controller.setFlow(WizardFlow.stockKeep);
+      for (final e in decisions.entries) {
+        await controller.setDecision(e.key, e.value);
+      }
+      return controller;
+    }
+
+    testWidgets('renders write_file target paths', (tester) async {
+      final controller = await buildController(steps: [
+        {
+          'id': 'apt',
+          'kind': 'write_file',
+          'target': '/etc/apt/sources.list',
+          'content': '',
+        },
+      ]);
+      await tester.pumpWidget(testHarness(
+        controller: controller,
+        child: const ReviewScreen(),
+        initialLocation: '/review',
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('/etc/apt/sources.list'), findsOneWidget);
+      expect(find.textContaining('Files to write'), findsOneWidget);
+    });
+
+    testWidgets(
+      'apply_files section reflects user decisions, not profile defaults',
+      (tester) async {
+        final controller = await buildController(
+          extraProfile: {
+            'stock_os': {
+              'files': [
+                {
+                  'id': 'keep_this',
+                  'paths': ['/keep/me'],
+                  'default_action': 'delete',
+                },
+                {
+                  'id': 'delete_this',
+                  'paths': ['/delete/me'],
+                  'default_action': 'delete',
+                },
+              ],
+            },
+          },
+          steps: [
+            {'id': 'apply_files', 'kind': 'apply_files'},
+          ],
+          decisions: {
+            // User reversed keep_this but left delete_this on default.
+            'file.keep_this': 'keep',
+            'file.delete_this': 'delete',
+          },
+        );
+        await tester.pumpWidget(testHarness(
+          controller: controller,
+          child: const ReviewScreen(),
+          initialLocation: '/review',
+        ));
+        await tester.pumpAndSettle();
+        // Preview should include `delete_this` but NOT `keep_this`.
+        expect(find.textContaining('/delete/me'), findsOneWidget);
+        expect(find.textContaining('/keep/me'), findsNothing);
+      },
+    );
+
+    testWidgets('resolves firmware.install_path in template targets',
+        (tester) async {
+      final controller = await buildController(
+        extraProfile: {
+          'firmware': {
+            'choices': [
+              {
+                'id': 'kalico',
+                'display_name': 'Kalico',
+                'repo': 'https://x',
+                'ref': 'main',
+                'install_path': '~/klipper',
+              },
+            ],
+          },
+        },
+        steps: [
+          {
+            'id': 'write_cfg',
+            'kind': 'write_file',
+            'target': '{{firmware.install_path}}/klippy.cfg',
+            'content': '',
+          },
+        ],
+        decisions: {'firmware': 'kalico'},
+      );
+      await tester.pumpWidget(testHarness(
+        controller: controller,
+        child: const ReviewScreen(),
+        initialLocation: '/review',
+      ));
+      await tester.pumpAndSettle();
+      // Template resolved at preview time, not rendered literally.
+      expect(find.textContaining('~/klipper/klippy.cfg'), findsOneWidget);
+      expect(
+        find.textContaining('{{firmware.install_path}}'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('conditional-wrapped steps get a "(maybe)" tag',
+        (tester) async {
+      final controller = await buildController(steps: [
+        {
+          'id': 'gate',
+          'kind': 'conditional',
+          'when': 'os_codename_is("buster")',
+          'then': [
+            {
+              'id': 'inner',
+              'kind': 'write_file',
+              'target': '/etc/apt/sources.list',
+              'content': '',
+            },
+          ],
+        },
+      ]);
+      await tester.pumpWidget(testHarness(
+        controller: controller,
+        child: const ReviewScreen(),
+        initialLocation: '/review',
+      ));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('(maybe, conditional)'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('[gate: when os_codename_is'),
+        findsOneWidget,
+      );
+    });
+  });
+}

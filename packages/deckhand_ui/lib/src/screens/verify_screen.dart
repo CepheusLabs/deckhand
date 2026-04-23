@@ -123,16 +123,20 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     final profile = controller.profile;
     final detections = profile?.stockOs.detections ?? const [];
     final allBackups = controller.printerState.deckhandBackups;
-    // Partition backups: those tagged with the CURRENT profile_id
-    // (or unknown / legacy / untagged) show as actionable. Backups
-    // that belong to a DIFFERENT profile show dimmed under a
-    // secondary header so the user sees them but doesn't assume they
-    // apply here. This matters on reused / cloned images.
+    // Three buckets:
+    //   relevant  - sidecar metadata confirms this profile_id
+    //   legacy    - no sidecar metadata (older Deckhand build); could
+    //               belong to anything, surface as a separate group
+    //               so the user can see + decide
+    //   foreign   - sidecar says it's from a DIFFERENT profile
     final currentProfileId = profile?.id;
     final relevantBackups = <DeckhandBackup>[];
+    final legacyBackups = <DeckhandBackup>[];
     final foreignBackups = <DeckhandBackup>[];
     for (final b in allBackups) {
-      if (b.profileId == null || b.profileId == currentProfileId) {
+      if (b.profileId == null) {
+        legacyBackups.add(b);
+      } else if (b.profileId == currentProfileId) {
         relevantBackups.add(b);
       } else {
         foreignBackups.add(b);
@@ -207,6 +211,45 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                         onPressed: _pruneOld,
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (legacyBackups.isNotEmpty) ...[
+            Card(
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Legacy backups without profile metadata '
+                      '(${legacyBackups.length})',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'These were written by an older Deckhand build that '
+                      'did not record which profile created them. Preview '
+                      'before restoring - content could belong to any '
+                      'profile previously run against this printer.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final b in legacyBackups)
+                      _BackupTile(
+                        backup: b,
+                        restoring: _restoring.contains(b.backupPath),
+                        deleting: _deleting.contains(b.backupPath),
+                        onRestore: () => _restore(b),
+                        onPreview: () => _preview(b),
+                        onDelete: () => _delete(b),
+                      ),
                   ],
                 ),
               ),
@@ -352,9 +395,14 @@ class _BackupTile extends StatelessWidget {
     // Sidecar-metadata line: who created this backup and when. Only
     // shown when at least one field is known - older backups without
     // a `.meta.json` stay quiet rather than displaying "unknown".
+    // Null-or-empty step_id is common (write_file steps inside a
+    // conditional carry no id) - omit those entirely so the line
+    // doesn't show "step null" or "step ".
     final metaBits = <String>[
-      if (backup.profileId != null) 'profile ${backup.profileId}',
-      if (backup.stepId != null) 'step ${backup.stepId}',
+      if (backup.profileId != null && backup.profileId!.isNotEmpty)
+        'profile ${backup.profileId}',
+      if (backup.stepId != null && backup.stepId!.isNotEmpty)
+        'step ${backup.stepId}',
       if (backup.createdAt != null)
         'at ${backup.createdAt!.toLocal().toString().substring(0, 19)}',
     ];
