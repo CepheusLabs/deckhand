@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/profile_text.dart';
+import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -293,24 +294,24 @@ class _ServiceCard extends StatelessWidget {
     final s = state;
     if (s == null) return null;
     if (s.unitActive || s.processRunning) {
-      return _StatusChip(
+      return StatusPill(
         label: 'running',
         color: theme.colorScheme.tertiary,
       );
     }
     if (s.unitExists) {
-      return _StatusChip(
+      return StatusPill(
         label: 'installed + stopped',
         color: theme.colorScheme.secondary,
       );
     }
     if (s.launcherScriptExists) {
-      return _StatusChip(
+      return StatusPill(
         label: 'launcher present',
         color: theme.colorScheme.secondary,
       );
     }
-    return _StatusChip(
+    return StatusPill(
       label: 'not detected',
       color: theme.colorScheme.outline,
     );
@@ -407,29 +408,7 @@ class _ProbeLoadingBanner extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
+// _StatusChip removed; callers use widgets/status_pill.dart :: StatusPill.
 
 class _DecisionChip extends StatelessWidget {
   const _DecisionChip({required this.label});

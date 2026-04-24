@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
+import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -435,7 +436,7 @@ class _DiscoveredCard extends StatelessWidget {
 
     final stateChip = enriched == null
         ? null
-        : _StateChip(state: enriched.klippyState);
+        : StatusPill.fromKlippyState(context, enriched.klippyState);
 
     final matchBadge = showMatchBadge
         ? _MatchBadge(match: probe?.match, profileName: profileName)
@@ -586,36 +587,4 @@ class _MatchBadge extends StatelessWidget {
   }
 }
 
-class _StateChip extends StatelessWidget {
-  const _StateChip({required this.state});
-  final String state;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final normalized = state.toLowerCase();
-    final color = switch (normalized) {
-      'ready' || 'printing' => theme.colorScheme.tertiary,
-      'startup' || 'shutdown' => theme.colorScheme.secondary,
-      'error' || 'disconnected' => theme.colorScheme.error,
-      _ => theme.colorScheme.outline,
-    };
-    return Semantics(
-      label: 'Klipper state $normalized',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          normalized,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
+// _StateChip removed; callers use StatusPill.fromKlippyState.

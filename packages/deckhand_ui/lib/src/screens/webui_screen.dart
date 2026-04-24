@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
+import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -166,12 +167,12 @@ class _WebuiChoiceTile extends StatelessWidget {
     final isActive = install?.active ?? false;
     Widget? chip;
     if (alreadyInstalled && isActive) {
-      chip = _StatusChip(
+      chip = StatusPill(
         label: 'installed + running',
         color: theme.colorScheme.primary,
       );
     } else if (alreadyInstalled) {
-      chip = _StatusChip(
+      chip = StatusPill(
         label: 'installed',
         color: theme.colorScheme.secondary,
       );
@@ -193,26 +194,4 @@ class _WebuiChoiceTile extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
+// _StatusChip removed; callers use widgets/status_pill.dart :: StatusPill.

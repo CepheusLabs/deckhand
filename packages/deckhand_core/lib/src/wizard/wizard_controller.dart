@@ -19,6 +19,18 @@ import '../shell/shell_quoting.dart';
 import 'dsl.dart';
 import 'printer_state_probe.dart';
 
+// Method bodies for backup management (restoreBackup, readBackupContent,
+// deleteBackup, pruneBackups) live in a separate file so the main
+// controller stays navigable. They operate on this controller via
+// library-private access because `part of` puts them in the same
+// library as WizardController.
+part 'wizard_controller_backup.dart';
+
+// Long step-execution bodies (write_file, install_screen, flash_mcus,
+// os_download, flash_disk, script + askpass) live in a separate file
+// for the same reason. Same `part of` scope-sharing applies.
+part 'wizard_controller_steps.dart';
+
 /// Which high-level flow the wizard is running.
 enum WizardFlow { none, stockKeep, freshFlash }
 
@@ -234,104 +246,24 @@ class WizardController {
   /// The backup file is LEFT in place after restore; callers can use
   /// [deleteBackup] to clean up once they're satisfied.
   /// Throws [StepExecutionException] on failure.
-  Future<void> restoreBackup(DeckhandBackup backup) async {
-    final s = _requireSession();
-    final useSudo = _looksLikeSystemPath(s, backup.originalPath);
-    final qSrc = _shellQuote(backup.backupPath);
-    final qDst = _shellQuote(backup.originalPath);
-    // cp -p preserves mode+owner+timestamps. We chain a `chown --
-    // reference` as belt-and-suspenders when running under sudo:
-    // if the backup's metadata was somehow flattened to root-owned
-    // (shouldn't happen because cp -p preserves), this explicitly
-    // copies ownership off the backup file. Silently continues when
-    // chown fails (e.g. chown not in PATH on busybox).
-    final cp = useSudo ? 'sudo cp -p' : 'cp -p';
-    final fixOwn = useSudo
-        ? ' && sudo chown --reference=$qSrc $qDst 2>/dev/null || true'
-        : '';
-    final cmd = '$cp $qSrc $qDst$fixOwn';
-    final res = await _runSsh(cmd);
-    if (!res.success) {
-      throw StepExecutionException(
-        'Could not restore ${backup.originalPath} from '
-        '${backup.backupPath}',
-        stderr: res.stderr,
-      );
-    }
-    await _refreshPrinterState(force: true);
-  }
+  /// Restore a prior `.deckhand-pre-*` backup over its original target.
+  /// Implementation in wizard_controller_backup.dart.
+  Future<void> restoreBackup(DeckhandBackup backup) =>
+      _restoreBackupImpl(this, backup);
 
   /// Fetch the content of a backup file so the UI can show a preview
   /// before the user commits to restoring. Returns null on read
   /// failure (best-effort; the user can still restore without
-  /// preview).
+  /// preview). Implementation in wizard_controller_backup.dart.
   ///
   /// Guards:
   ///   - 256 KiB byte cap so a big binary can't DoS the UI.
   ///   - 200-line cap; very-long single-line content (minified JSON,
   ///     one-liner configs) truncates at the line level too.
-  ///   - Binary detection via null-byte probe in the first 512 bytes;
-  ///     binary files return a marker string rather than garbage.
-  Future<String?> readBackupContent(DeckhandBackup backup) async {
-    _requireSession();
-    const maxBytes = 256 * 1024;
-    const maxLines = 200;
-    final useSudo = _looksLikeSystemPath(_session!, backup.backupPath);
-    final q = _shellQuote(backup.backupPath);
-    // Binary detection is layered so it works across every shell we
-    // care about:
-    //   Layer A - `file -b --mime`: full-fat file(1) on Debian /
-    //             Armbian / most BSDs. Look for both `charset=binary`
-    //             (classic text/plain-vs-binary signal) AND
-    //             `application/` types that we know are binary
-    //             (octet-stream, zip, x-executable, gzip, ...).
-    //   Layer B - `file -b` without --mime: busybox file applet
-    //             doesn't have --mime. Falls back to keyword sniff on
-    //             the legacy human-readable line (ELF, "data",
-    //             "executable", "archive", ...).
-    //   Layer C - null-byte count in the first 512 bytes: belt-and-
-    //             suspenders for distros without file(1) at all
-    //             (stripped Alpine). Uses `od -An -c -N 512` and
-    //             greps for the literal `\0` glyph od emits.
-    // Any layer that fires short-circuits to the binary marker.
-    final fileCmd =
-        useSudo ? 'sudo file -b --mime' : 'file -b --mime';
-    final fileBareCmd = useSudo ? 'sudo file -b' : 'file -b';
-    final odCmd = useSudo ? 'sudo od -An -c -N 512' : 'od -An -c -N 512';
-    final detectCmd =
-        '($fileCmd $q 2>/dev/null) || '
-        '($fileBareCmd $q 2>/dev/null) || '
-        '($odCmd $q 2>/dev/null)';
-    final probe = await _runSsh(detectCmd);
-    if (_looksLikeBinary(probe.stdout)) {
-      return '[binary file, ${_humanizeBytes(backup.backupPath)} - '
-          'preview unavailable]';
-    }
-    // Text read with byte cap; pipe through head -n for line cap.
-    final head = useSudo ? 'sudo head -c $maxBytes' : 'head -c $maxBytes';
-    final res = await _runSsh('$head $q 2>/dev/null || true');
-    if (res.stdout.isEmpty) return null;
-    var body = res.stdout;
-    final bytesTruncated = body.length >= maxBytes;
-    final lines = body.split('\n');
-    var linesTruncated = false;
-    if (lines.length > maxLines) {
-      body = lines.take(maxLines).join('\n');
-      linesTruncated = true;
-    }
-    final notes = <String>[
-      if (bytesTruncated) 'truncated at 256 KiB',
-      if (linesTruncated)
-        'truncated at $maxLines lines (file has ${lines.length} lines total)',
-    ];
-    if (notes.isEmpty) return body;
-    return '$body\n\n[... ${notes.join("; ")} ...]';
-  }
-
-  /// Best-effort humanised byte-size placeholder. The stat is cheap
-  /// but we don't actually fetch it - just use the filename for the
-  /// preview label.
-  String _humanizeBytes(String path) => path.split('/').last;
+  ///   - Binary detection via layered probe; binary files return a
+  ///     marker string rather than garbage.
+  Future<String?> readBackupContent(DeckhandBackup backup) =>
+      _readBackupContentImpl(this, backup);
 
   /// Decide if the probe output from the layered binary detector
   /// indicates a non-text file. See [readBackupContent] for the
@@ -397,21 +329,9 @@ class WizardController {
   /// Delete a `.deckhand-pre-*` backup + its `.meta.json` sidecar.
   /// Used by the verify_screen after the user has confirmed they
   /// don't need the rollback snapshot anymore. Throws on failure.
-  Future<void> deleteBackup(DeckhandBackup backup) async {
-    _requireSession();
-    final useSudo = _looksLikeSystemPath(_session!, backup.backupPath);
-    final rm = useSudo ? 'sudo rm -f' : 'rm -f';
-    final qBackup = _shellQuote(backup.backupPath);
-    final qMeta = _shellQuote('${backup.backupPath}.meta.json');
-    final res = await _runSsh('$rm $qBackup $qMeta');
-    if (!res.success) {
-      throw StepExecutionException(
-        'Could not delete backup ${backup.backupPath}',
-        stderr: res.stderr,
-      );
-    }
-    await _refreshPrinterState(force: true);
-  }
+  /// Implementation in wizard_controller_backup.dart.
+  Future<void> deleteBackup(DeckhandBackup backup) =>
+      _deleteBackupImpl(this, backup);
 
   /// Sweep all `.deckhand-pre-*` backups older than [olderThan] from
   /// the printer. When [keepLatestPerTarget] is true, the single
@@ -420,77 +340,18 @@ class WizardController {
   /// against "I pruned too aggressively and now have no snapshot of
   /// my sources.list."
   ///
-  /// Used by verify_screen's "Prune old backups" action.
   /// Returns the number of backup files removed (sidecars counted
-  /// as part of the same logical backup).
-  ///
-  /// Performance: deletes every victim in ONE ssh.run call per
-  /// privilege bucket, then re-probes once.
+  /// as part of the same logical backup). Implementation in
+  /// wizard_controller_backup.dart.
   Future<int> pruneBackups({
     Duration olderThan = const Duration(days: 30),
     bool keepLatestPerTarget = false,
-  }) async {
-    _requireSession();
-    final cutoff = DateTime.now().subtract(olderThan);
-    var victims = _printerState.deckhandBackups.where((b) {
-      final age = b.createdAt;
-      if (age == null) return false;
-      return age.isBefore(cutoff);
-    }).toList();
-    if (keepLatestPerTarget) {
-      // Build {originalPath -> newest backup} across the FULL backup
-      // list, then exclude those from the victim set regardless of
-      // age. Caller opts in when they want a safety-net keep policy.
-      final newest = <String, DeckhandBackup>{};
-      for (final b in _printerState.deckhandBackups) {
-        final t = b.createdAt?.millisecondsSinceEpoch ?? 0;
-        final current = newest[b.originalPath];
-        if (current == null ||
-            (current.createdAt?.millisecondsSinceEpoch ?? 0) < t) {
-          newest[b.originalPath] = b;
-        }
-      }
-      final spared = newest.values.map((b) => b.backupPath).toSet();
-      victims = victims.where((b) => !spared.contains(b.backupPath))
-          .toList();
-    }
-    if (victims.isEmpty) return 0;
-    // Split into sudo-required and plain batches so we don't escalate
-    // when we don't need to (and don't fail when sudo is required).
-    final sudoBatch = <String>[];
-    final plainBatch = <String>[];
-    for (final b in victims) {
-      final paths = [
-        _shellQuote(b.backupPath),
-        _shellQuote('${b.backupPath}.meta.json'),
-      ];
-      if (_looksLikeSystemPath(_session!, b.backupPath)) {
-        sudoBatch.addAll(paths);
-      } else {
-        plainBatch.addAll(paths);
-      }
-    }
-    if (plainBatch.isNotEmpty) {
-      final res = await _runSsh('rm -f ${plainBatch.join(" ")}');
-      if (!res.success) {
-        throw StepExecutionException(
-          'Could not prune user-owned backups',
-          stderr: res.stderr,
-        );
-      }
-    }
-    if (sudoBatch.isNotEmpty) {
-      final res = await _runSsh('sudo rm -f ${sudoBatch.join(" ")}');
-      if (!res.success) {
-        throw StepExecutionException(
-          'Could not prune root-owned backups',
-          stderr: res.stderr,
-        );
-      }
-    }
-    await _refreshPrinterState(force: true);
-    return victims.length;
-  }
+  }) =>
+      _pruneBackupsImpl(
+        this,
+        olderThan: olderThan,
+        keepLatestPerTarget: keepLatestPerTarget,
+      );
 
   Future<void> setDecision(String path, Object value) async {
     // Immutable map merge rather than Map.from() + mutate. Avoids any
@@ -872,190 +733,9 @@ class WizardController {
 
   bool _hasGlob(String path) => RegExp(r'[*?\[]').hasMatch(path);
 
-  Future<void> _runWriteFile(Map<String, dynamic> step) async {
-    final s = _requireSession();
-    final target = step['target'] as String?;
-    final templatePath = step['template'] as String?;
-    final content = step['content'] as String?;
-    if (target == null) {
-      throw StepExecutionException('write_file missing target');
-    }
-    // Per-step precondition: only run when `require_path` exists on
-    // the printer. Lets a profile gate destructive writes on runtime
-    // state (e.g. "only rewrite KlipperScreen's launcher if
-    // KlipperScreen is actually installed"). Cheaper than wrapping
-    // every caller in a conditional.
-    final requirePath = step['require_path'] as String?;
-    if (requirePath != null) {
-      final qReq = _shellQuote(requirePath);
-      final check = await ssh.run(s, '[ -e $qReq ] && echo y || echo n');
-      if (!check.stdout.contains('y')) {
-        _log(
-          step,
-          '[write_file] skipped: require_path "$requirePath" does not '
-          'exist on this printer',
-        );
-        return;
-      }
-    }
-    String rendered;
-    if (content != null) {
-      rendered = _render(content);
-    } else if (templatePath != null) {
-      final src = _resolveProfilePath(templatePath);
-      rendered = _render(await File(src).readAsString());
-    } else {
-      throw StepExecutionException('write_file requires template or content');
-    }
-
-    // Explicit `sudo: true` wins; otherwise default to sudo for paths
-    // outside the SSH user's home directory. We can't SFTP directly to
-    // root-owned paths like /etc/apt/sources.list, so stage in /tmp
-    // and mv into place.
-    final useSudo = step['sudo'] as bool? ?? _looksLikeSystemPath(s, target);
-    final mode = _parseFileMode(step['mode']);
-    final owner = step['owner'] as String?;
-    // Auto-snapshot the existing file before overwriting, unless the
-    // step explicitly opts out (backup: false). System files (/etc/*)
-    // are the priority case: rewriting sources.list or a systemd unit
-    // silently is a recipe for unrecoverable mistakes when the profile
-    // got it wrong. A `.deckhand-pre-<ts>` sibling is easy to restore.
-    final backup = step['backup'] as bool? ?? true;
-
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final tmpLocal = p.join(Directory.systemTemp.path, 'deckhand-$ts.tmp');
-    final remoteTmp = '/tmp/deckhand-write-$ts.tmp';
-    await File(tmpLocal).writeAsString(rendered);
-
-    try {
-      if (backup) {
-        final qTarget0 = _shellQuote(target);
-        final profileTag = _profile?.id ?? 'unknown';
-        final backupPath =
-            '$target.deckhand-pre-$profileTag-$ts';
-        final metadataPath = '$backupPath.meta.json';
-        final qBackup = _shellQuote(backupPath);
-        final qMeta = _shellQuote(metadataPath);
-        // Metadata sidecar: profile-id, profile-version, step-id,
-        // timestamp. Written next to the backup so future runs (or a
-        // human inspecting with `cat`) know who + when + why.
-        final meta = const JsonEncoder.withIndent('  ').convert({
-          'profile_id': _profile?.id,
-          'profile_version': _profile?.version,
-          'step_id': step['id'],
-          'backup_of': target,
-          'created_at_ms': ts,
-          'created_at_iso': DateTime.now().toUtc().toIso8601String(),
-          'deckhand_schema': 1,
-        });
-        // Stage the metadata locally and SFTP-upload it to a temp
-        // path, then mv into place. The earlier inline
-        // `sh -c "printf %s ... > ..."` trick layered a single-quoted
-        // JSON payload inside a double-quoted sh -c argument, which
-        // becomes fragile the moment `qMeta` contains a double quote
-        // (possible when the target path has one). SFTP + sudo-mv is
-        // the same number of round trips and has no nested-quoting
-        // surface at all.
-        final metaTmpLocal = p.join(
-          Directory.systemTemp.path,
-          'deckhand-meta-$ts.json',
-        );
-        await File(metaTmpLocal).writeAsString(meta);
-        final remoteMetaTmp = '/tmp/deckhand-meta-$ts.json';
-        await ssh.upload(s, metaTmpLocal, remoteMetaTmp, mode: 420); // 0o644
-        final cp = useSudo ? 'sudo cp -p' : 'cp -p';
-        final writeMeta = useSudo
-            ? 'sudo mv $remoteMetaTmp $qMeta && sudo chmod 0644 $qMeta'
-            : 'mv $remoteMetaTmp $qMeta';
-        final writeProbe = useSudo
-            ? 'sudo touch "\$(dirname $qTarget0)/.deckhand-wtest-$ts" '
-                '2>/dev/null && '
-                'sudo rm -f "\$(dirname $qTarget0)/.deckhand-wtest-$ts"'
-            : 'touch "\$(dirname $qTarget0)/.deckhand-wtest-$ts" '
-                '2>/dev/null && '
-                'rm -f "\$(dirname $qTarget0)/.deckhand-wtest-$ts"';
-        final snapCmd =
-            'if [ ! -e $qTarget0 ]; then echo DECKHAND_BACKUP_NOOP; '
-            'elif ! ( $writeProbe ); then '
-            '  echo DECKHAND_BACKUP_RO_FS; '
-            'else '
-            '  $cp $qTarget0 $qBackup && $writeMeta && '
-            '  echo DECKHAND_BACKUP_CREATED; '
-            'fi';
-        final snapRes = await _runSsh(snapCmd);
-        if (!snapRes.success) {
-          _emit(
-            StepWarning(
-              stepId: step['id'] as String? ?? 'write_file',
-              message: 'Could not snapshot existing $target before '
-                  'overwrite: ${snapRes.stderr.trim()}',
-            ),
-          );
-        } else if (snapRes.stdout.contains('DECKHAND_BACKUP_CREATED')) {
-          _log(step, '[write_file] backup -> $backupPath');
-        } else if (snapRes.stdout.contains('DECKHAND_BACKUP_RO_FS')) {
-          _emit(
-            StepWarning(
-              stepId: step['id'] as String? ?? 'write_file',
-              message:
-                  'Target filesystem is read-only; no backup taken. The '
-                  'write step below may still succeed under sudo, but '
-                  'you will have no rollback snapshot.',
-            ),
-          );
-        } else {
-          _log(step, '[write_file] no prior $target; nothing to back up');
-        }
-      }
-      await ssh.upload(s, tmpLocal, remoteTmp);
-      final qTmp = _shellQuote(remoteTmp);
-      final qTarget = _shellQuote(target);
-      final modeArg = mode != null ? '-m ${mode.toRadixString(8)} ' : '';
-      final ownerArg = owner != null ? '-o ${_shellQuote(owner)} ' : '';
-      final String cmd;
-      if (useSudo) {
-        // `install` atomically places the file with the right mode (and
-        // optional owner). `rm -f` cleans up even if install is a no-op
-        // symlink, though it usually consumes the source.
-        cmd =
-            'sudo install ${modeArg}${ownerArg}$qTmp $qTarget && rm -f $qTmp';
-      } else {
-        final chmod = mode != null
-            ? ' && chmod ${mode.toRadixString(8)} $qTarget'
-            : '';
-        cmd = 'mv $qTmp $qTarget$chmod';
-      }
-      final res = await _runSsh(cmd);
-      _log(
-        step,
-        '[write_file] wrote $target (${rendered.length} bytes'
-        '${useSudo ? ', via sudo' : ''})',
-      );
-      if (!res.success) {
-        // Make sure we don't leave the staged file behind.
-        await _runSsh('rm -f $qTmp');
-        throw StepExecutionException(
-          'write_file $target failed',
-          stderr: res.stderr,
-        );
-      }
-    } finally {
-      try {
-        await File(tmpLocal).delete();
-      } catch (_) {}
-      // Clean up the meta staging file too. It's only written inside
-      // the `if (backup)` branch above, so a FileSystemException here
-      // just means backup was skipped and there's nothing to remove.
-      try {
-        final metaTmpLocal = p.join(
-          Directory.systemTemp.path,
-          'deckhand-meta-$ts.json',
-        );
-        final f = File(metaTmpLocal);
-        if (await f.exists()) await f.delete();
-      } catch (_) {}
-    }
-  }
+  /// write_file step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runWriteFile(Map<String, dynamic> step) =>
+      _runWriteFileImpl(this, step);
 
   bool _looksLikeSystemPath(SshSession s, String target) {
     // Anything under the login user's home (and /tmp) is writable
@@ -1068,397 +748,25 @@ class WizardController {
     return true;
   }
 
-  /// Accepts an int (already decimal) or a string like `"0644"` / `"755"`
-  /// / `"0o755"` and returns the integer mode. Returns null when the
-  /// step omits `mode:`.
-  int? _parseFileMode(Object? v) {
-    if (v == null) return null;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    if (v is String) {
-      var raw = v.trim();
-      if (raw.startsWith('0o') || raw.startsWith('0O')) {
-        raw = raw.substring(2);
-      }
-      return int.parse(raw, radix: 8);
-    }
-    return null;
-  }
+  /// install_screen step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runInstallScreen(Map<String, dynamic> step) =>
+      _runInstallScreenImpl(this, step);
 
-  Future<void> _runInstallScreen(Map<String, dynamic> step) async {
-    final s = _requireSession();
-    final screenId = _state.decisions['screen'] as String?;
-    if (screenId == null) {
-      _log(step, '[screen] no screen selected - skipping install');
-      return;
-    }
-    final screen = _profile!.screens.firstWhere(
-      (sc) => sc.id == screenId,
-      orElse: () => throw StepExecutionException('unknown screen $screenId'),
-    );
-    final sourceKind = screen.raw['source_kind'] as String?;
-    if (sourceKind == 'bundled') {
-      final src = _resolveProfilePath(screen.raw['source_path'] as String);
-      final remote = '~/${p.basename(src)}';
-      await _uploadDir(src, remote);
-      final installScript = screen.raw['install_script'] as String?;
-      if (installScript != null) {
-        final srcInstall = _resolveProfilePath(installScript);
-        const remoteInstall = '~/deckhand-screen-install.sh';
-        await ssh.upload(s, srcInstall, remoteInstall, mode: 493); // 0o755
-        final res = await _runSsh(
-          'bash $remoteInstall',
-          timeout: const Duration(minutes: 5),
-        );
-        if (!res.success) {
-          throw StepExecutionException(
-            'screen install script failed',
-            stderr: res.stderr,
-          );
-        }
-      }
-      _log(step, '[screen] installed $screenId');
-    } else if (sourceKind == 'restore_from_backup') {
-      _log(
-        step,
-        '[screen] $screenId restore-from-backup requires a mounted backup image - not yet automated',
-      );
-    } else {
-      _log(
-        step,
-        '[screen] $screenId source kind "$sourceKind" not implemented',
-      );
-    }
-  }
+  /// flash_mcus step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runFlashMcus(Map<String, dynamic> step) =>
+      _runFlashMcusImpl(this, step);
 
-  Future<void> _runFlashMcus(Map<String, dynamic> step) async {
-    _requireSession();
-    final which = ((step['which'] as List?) ?? const []).cast<String>();
-    final fw = _selectedFirmware();
-    if (fw == null) throw StepExecutionException('no firmware selected');
-    final install = fw.installPath ?? '~/klipper';
-    for (final id in which) {
-      final mcu = _profile!.mcus.firstWhere(
-        (m) => m.id == id,
-        orElse: () => throw StepExecutionException('unknown mcu $id'),
-      );
-      final raw = mcu.raw;
-      final configLines = _mcuConfig(raw);
-      final writeConf =
-          'cd $install && cat > .config <<"MCUCONF"\n$configLines\nMCUCONF\n'
-          'make olddefconfig >/dev/null && make clean >/dev/null && make -j1';
-      final build = await _runSsh(
-        writeConf,
-        timeout: const Duration(minutes: 20),
-      );
-      if (!build.success) {
-        throw StepExecutionException(
-          'mcu $id build failed',
-          stderr: build.stderr,
-        );
-      }
-      _log(step, '[mcu] built $id');
+  /// os_download step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runOsDownload(Map<String, dynamic> step) =>
+      _runOsDownloadImpl(this, step);
 
-      final transport =
-          (raw['transport'] as Map?)?.cast<String, dynamic>() ?? {};
-      if (transport['requires_physical_access'] == true) {
-        await _awaitUserInput('${mcu.id}_physical_prompt', {
-          'id': '${mcu.id}_physical_prompt',
-          'kind': 'prompt',
-          'message':
-              transport['physical_access_notes'] as String? ??
-              'Put the MCU into bootloader mode.',
-        });
-      }
-      _log(
-        step,
-        '[mcu] $id flash pending - refer to profile firmware/flash-$id.sh',
-      );
-    }
-  }
+  /// flash_disk step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runFlashDisk(Map<String, dynamic> step) =>
+      _runFlashDiskImpl(this, step);
 
-  Future<void> _runOsDownload(Map<String, dynamic> step) async {
-    final osId = _state.decisions['flash.os'] as String?;
-    if (osId == null) throw StepExecutionException('no OS image selected');
-    final opt = _profile!.os.freshInstallOptions.firstWhere(
-      (o) => o.id == osId,
-      orElse: () => throw StepExecutionException('unknown OS option $osId'),
-    );
-    final dest =
-        step['dest'] as String? ??
-        p.join(Directory.systemTemp.path, 'deckhand-${opt.id}.img');
-    _log(step, '[os] downloading ${opt.url} -> $dest');
-
-    final stepId = step['id'] as String? ?? 'os_download';
-    String? sha;
-    await for (final ev in upstream.osDownload(
-      url: opt.url,
-      destPath: dest,
-      expectedSha256: opt.sha256,
-    )) {
-      if (ev.phase == OsDownloadPhase.done) {
-        sha = ev.sha256;
-        _emit(
-          StepProgress(
-            stepId: stepId,
-            percent: 1.0,
-            message: 'download complete',
-          ),
-        );
-      } else if (ev.phase == OsDownloadPhase.failed) {
-        throw StepExecutionException('os download failed');
-      } else {
-        _emit(
-          StepProgress(
-            stepId: stepId,
-            percent: ev.fraction,
-            message:
-                '${(ev.bytesDone / (1 << 20)).toStringAsFixed(1)} MiB'
-                '${ev.bytesTotal > 0 ? ' / ${(ev.bytesTotal / (1 << 20)).toStringAsFixed(1)} MiB' : ''}',
-          ),
-        );
-      }
-    }
-
-    // Record artefact location + hash for the flash_disk step.
-    await setDecision('flash.image_path', dest);
-    if (sha != null) {
-      await setDecision('flash.image_sha256', sha);
-    }
-    _log(step, '[os] ready at $dest${sha != null ? " (sha256 $sha)" : ""}');
-  }
-
-  Future<void> _runFlashDisk(Map<String, dynamic> step) async {
-    final diskId = _state.decisions['flash.disk'] as String?;
-    if (diskId == null) throw StepExecutionException('no flash disk selected');
-    final imagePath = _state.decisions['flash.image_path'] as String?;
-    if (imagePath == null) {
-      throw StepExecutionException(
-        'no image path recorded - did os_download run?',
-      );
-    }
-    final helper = elevatedHelper;
-    if (helper == null) {
-      throw StepExecutionException(
-        'elevated helper not configured - cannot write raw disk',
-      );
-    }
-    final token = await security.issueConfirmationToken(
-      operation: 'write_image',
-      target: diskId,
-    );
-    final verify = step['verify_after_write'] as bool? ?? true;
-    final expectedSha = _state.decisions['flash.image_sha256'] as String?;
-    final stepId = step['id'] as String? ?? 'flash_disk';
-    _log(step, '[flash] writing $imagePath -> $diskId (verify=$verify)');
-
-    await for (final ev in helper.writeImage(
-      imagePath: imagePath,
-      diskId: diskId,
-      confirmationToken: token.value,
-      verifyAfterWrite: verify,
-      expectedSha256: expectedSha,
-    )) {
-      final pct = ev.fraction;
-      _emit(StepProgress(stepId: stepId, percent: pct, message: ev.message));
-      if (ev.phase == FlashPhase.failed) {
-        throw StepExecutionException(ev.message ?? 'flash failed');
-      }
-    }
-    _log(step, '[flash] done');
-  }
-
-  Future<void> _runScript(Map<String, dynamic> step) async {
-    final s = _requireSession();
-    final rel = step['path'] as String?;
-    if (rel == null) {
-      throw StepExecutionException('script step missing "path"');
-    }
-    final local = _resolveProfilePath(rel);
-    if (!await File(local).exists()) {
-      throw StepExecutionException('script not found: $rel');
-    }
-    // A random suffix makes the remote path unguessable so a non-root
-    // attacker on the printer cannot read (or race-overwrite) the
-    // staged script while it is still on disk. mode 0o700 - only
-    // the SSH user's shell execs it, nobody else reads or mutates.
-    final basename = p.basename(rel);
-    final remote = '/tmp/deckhand-${_randomSuffix()}-$basename';
-    await ssh.upload(s, local, remote, mode: 448); // 0o700
-    final interpreter = step['interpreter'] as String? ?? 'bash';
-    final extraArgs = ((step['args'] as List?) ?? const []).cast<String>();
-    final ignoreErrors = step['ignore_errors'] as bool? ?? false;
-    final timeoutSecs = (step['timeout_seconds'] as num?)?.toInt() ?? 600;
-    // Two orthogonal knobs, intentionally un-coupled:
-    //   - `sudo: true`  -> wrap the whole invocation in `sudo -E`
-    //                      so the script runs as root from line 1.
-    //   - `askpass`     -> stand up an askpass helper + a PATH-shimmed
-    //                      `sudo` wrapper so any *internal* `sudo X`
-    //                      the script issues can authenticate without
-    //                      a pty. On by default whenever we have a
-    //                      cached password (i.e. password SSH). Turn
-    //                      off with `askpass: false` for scripts you
-    //                      want to prove don't elevate at all.
-    final useSudo = step['sudo'] as bool? ?? false;
-    final setUpAskpass =
-        (step['askpass'] as bool? ?? true) && _sshPassword != null;
-
-    final argStr = extraArgs.map(shellSingleQuote).join(' ');
-    final baseCmd = argStr.isEmpty
-        ? '$interpreter $remote'
-        : '$interpreter $remote $argStr';
-
-    // Profile-supplied env vars (e.g. PYTHON_SHA256 for the python
-    // rebuild script). Every key/value goes through shell quoting so a
-    // profile can't break out of the VAR=value form.
-    final extraEnvPrefix = _buildEnvPrefix(step['env']);
-
-    String envPrefix = extraEnvPrefix;
-    _ScriptSudoHelper? helper;
-    if (setUpAskpass) {
-      helper = await _installSudoAskpassHelper();
-      envPrefix =
-          '${envPrefix}SUDO_ASKPASS=${shellSingleQuote(helper.askpassPath)} '
-          'PATH=${shellSingleQuote(helper.binDir)}:\$PATH ';
-    }
-    // If askpass is staged, the outer sudo (if requested) routes
-    // through the same helper via `-A`, so the whole command ships
-    // with an env prefix and no `sudo ` at position 0 - _runSsh
-    // leaves it alone. Without askpass, fall back to `sudo -E` and
-    // let _runSsh strip it to forward the password via sudo -S.
-    final String cmd;
-    if (useSudo && setUpAskpass) {
-      cmd = '${envPrefix}sudo -A -E $baseCmd';
-    } else if (useSudo) {
-      cmd = 'sudo -E $baseCmd';
-    } else {
-      cmd = '$envPrefix$baseCmd';
-    }
-    _log(
-      step,
-      '[script] running $rel'
-      '${useSudo ? " (root)" : ""}'
-      '${setUpAskpass ? " (askpass)" : ""}',
-    );
-    final res = await _runSsh(cmd, timeout: Duration(seconds: timeoutSecs));
-    if (res.stdout.trim().isNotEmpty) {
-      for (final line in res.stdout.trim().split('\n')) {
-        _log(step, '[script]   $line');
-      }
-    }
-    if (!res.success && !ignoreErrors) {
-      // Sniff a sudoers-blocks-askpass configuration and give the
-      // profile author a usable pointer instead of the raw sudo
-      // error. Typical culprit: `Defaults !visiblepw` or a missing
-      // `mks ALL=(ALL) NOPASSWD:` line combined with requiretty.
-      if (_looksLikeSudoPtyError(res.stderr)) {
-        throw StepExecutionException(
-          'script $rel could not authenticate for sudo over an SSH '
-          'session without a tty. Check the printer\'s sudoers config: '
-          'either grant passwordless sudo for this user, or ensure '
-          'SUDO_ASKPASS is permitted (no `Defaults requiretty`, no '
-          '`Defaults !visiblepw`).',
-          stderr: res.stderr,
-        );
-      }
-      throw StepExecutionException(
-        'script $rel failed (exit ${res.exitCode})',
-        stderr: res.stderr,
-      );
-    }
-    _log(step, '[script] done ($rel, exit ${res.exitCode})');
-  }
-
-  /// Stages a temporary sudo-askpass helper + `sudo` wrapper on the
-  /// remote printer.
-  ///
-  /// - `<askpassPath>` is a 0700 shell script that prints the cached
-  ///   SSH password on stdout. sudo reads it via `SUDO_ASKPASS` when
-  ///   invoked with `-A`.
-  /// - `<binDir>/sudo` is a 0755 shim that forwards to `/usr/bin/sudo
-  ///   -A "$@"`. With `<binDir>` at the front of PATH, every `sudo`
-  ///   call inside the script (including `sudo apt-get`, `sudo
-  ///   systemctl`, etc.) transparently uses askpass.
-  ///
-  /// Both files live in `/tmp` and the caller is expected to remove
-  /// them once the script completes (see the `finally` block in
-  /// `_runScript`). Leaving them around briefly is acceptable: the
-  /// printer is already authenticated via SSH with the same password,
-  /// so there's no leak of a higher-privilege secret.
-  Future<_ScriptSudoHelper> _installSudoAskpassHelper() async {
-    // Reuse within a single WizardController lifetime: the helper
-    // costs two uploads + a chmod, and the password in it is the same
-    // for every step. Cleared in dispose().
-    final cached = _sessionAskpass;
-    if (cached != null) return cached;
-
-    final s = _requireSession();
-    final pw = _sshPassword;
-    if (pw == null) {
-      throw StateError('cannot install askpass helper without a password');
-    }
-    final ts = DateTime.now().microsecondsSinceEpoch;
-    final askpassPath = '/tmp/deckhand-askpass-$ts';
-    final binDir = '/tmp/deckhand-bin-$ts';
-
-    // askpass: print the password. Single-quoted via _shellQuote so
-    // special characters survive the trip through bash unmangled.
-    final askpassBody = "#!/bin/sh\nprintf '%s' ${_shellQuote(pw)}\n";
-    final askpassLocal = p.join(
-      Directory.systemTemp.path,
-      'deckhand-askpass-$ts.sh',
-    );
-    await File(askpassLocal).writeAsString(askpassBody);
-    try {
-      await ssh.upload(s, askpassLocal, askpassPath, mode: 448); // 0o700
-    } finally {
-      try {
-        await File(askpassLocal).delete();
-      } catch (_) {}
-    }
-    // Belt + suspenders: some SFTP servers ignore the `mode` hint we
-    // passed at upload time. Force 0700 explicitly, and pre-empt any
-    // umask weirdness while we're here.
-    await ssh.run(s, 'chmod 700 ${_shellQuote(askpassPath)}');
-
-    // Wrapper: call real sudo with -A so it uses askpass.
-    const wrapperBody =
-        '#!/bin/sh\nexec /usr/bin/sudo -A "\$@"\n';
-    final wrapperLocal = p.join(
-      Directory.systemTemp.path,
-      'deckhand-sudo-$ts.sh',
-    );
-    await File(wrapperLocal).writeAsString(wrapperBody);
-    try {
-      await ssh.run(s, 'mkdir -p ${_shellQuote(binDir)}');
-      await ssh.upload(s, wrapperLocal, '$binDir/sudo', mode: 493); // 0o755
-    } finally {
-      try {
-        await File(wrapperLocal).delete();
-      } catch (_) {}
-    }
-    await ssh.run(s, 'chmod 755 ${_shellQuote('$binDir/sudo')}');
-
-    final helper = _ScriptSudoHelper(
-      askpassPath: askpassPath,
-      binDir: binDir,
-    );
-    _sessionAskpass = helper;
-    return helper;
-  }
-
-  /// Heuristic: does this stderr output look like sudo failing to
-  /// authenticate in no-pty mode? If so, we can surface a much better
-  /// message than "script exited 1". Matches the common Debian/Ubuntu
-  /// signatures; not locale-aware, but sudo defaults to English for
-  /// these paths.
-  bool _looksLikeSudoPtyError(String stderr) {
-    final lower = stderr.toLowerCase();
-    return lower.contains('a terminal is required') ||
-        lower.contains('no tty present') ||
-        lower.contains('askpass helper') ||
-        lower.contains('a password is required');
-  }
+  /// script step dispatcher. Body in wizard_controller_steps.dart.
+  Future<void> _runScript(Map<String, dynamic> step) =>
+      _runScriptImpl(this, step);
 
   /// Writes `~/printer_data/config/<filename>` (default `deckhand.json`)
   /// so the connect screen can recognise this printer as one Deckhand

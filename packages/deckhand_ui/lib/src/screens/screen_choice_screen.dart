@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/profile_text.dart';
+import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -85,18 +86,19 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
                         Expanded(child: Text(s.displayName ?? s.id)),
                         if (s.status != null) ...[
                           const SizedBox(width: 8),
-                          _StatusBadge(status: s.status as String),
+                          StatusPill.fromProfileStatus(
+                              context, s.status as String),
                         ],
                         if (probe.screenInstalls[s.id]?.active == true) ...[
                           const SizedBox(width: 6),
-                          _InstallBadge(
+                          StatusPill.bordered(
                             label: 'running',
                             color: theme.colorScheme.primary,
                           ),
                         ] else if (
                             probe.screenInstalls[s.id]?.installed == true) ...[
                           const SizedBox(width: 6),
-                          _InstallBadge(
+                          StatusPill.bordered(
                             label: 'installed',
                             color: theme.colorScheme.secondary,
                           ),
@@ -144,62 +146,5 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
   }
 }
 
-class _InstallBadge extends StatelessWidget {
-  const _InstallBadge({required this.label, required this.color});
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withValues(alpha: 0.4),
-          width: 0.5,
-        ),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = switch (status) {
-      'stable' => theme.colorScheme.tertiary,
-      'beta' => theme.colorScheme.secondary,
-      'alpha' => theme.colorScheme.primary,
-      'experimental' => theme.colorScheme.error,
-      'deprecated' => theme.colorScheme.error,
-      _ => theme.colorScheme.outline,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        status,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
+// _InstallBadge + _StatusBadge removed; callers use
+// widgets/status_pill.dart :: StatusPill.bordered / fromProfileStatus.

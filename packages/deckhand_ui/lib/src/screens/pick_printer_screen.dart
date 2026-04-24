@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
+import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -120,7 +121,7 @@ class _PrinterCard extends StatelessWidget {
                 ),
                 Text(entry.displayName, style: t.textTheme.titleLarge),
                 const SizedBox(height: 8),
-                _StatusChip(status: entry.status),
+                StatusPill.fromProfileStatus(context, entry.status),
               ],
             ),
           ),
@@ -130,28 +131,7 @@ class _PrinterCard extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final color = switch (status) {
-      'stable' => t.colorScheme.tertiary,
-      'beta' => t.colorScheme.secondary,
-      'alpha' => t.colorScheme.primary,
-      'deprecated' => t.colorScheme.error,
-      _ => t.colorScheme.outline,
-    };
-    return Chip(
-      label: Text(status),
-      labelStyle: t.textTheme.labelSmall?.copyWith(color: color),
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    );
-  }
-}
+// _StatusChip removed; callers use widgets/status_pill.dart :: StatusPill.fromProfileStatus.
 
 class _ErrorBox extends StatelessWidget {
   const _ErrorBox({required this.message, required this.onRetry});
