@@ -293,15 +293,21 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
           );
         }).toList();
       default:
-        // Fail loud so profile authors don't get a silent empty
-        // dialog. We return [] so the wizard still advances rather
-        // than wedging forever, but the log tells them what's wrong.
-        debugPrint(
-          '[progress_screen] unknown options_from path "$from"; '
-          'add a case to _resolveChooseOneOptions or declare `options: '
-          '[...]` inline on the step.',
-        );
-        return const [];
+        // Fail loud but visibly. Previously this logged via
+        // debugPrint (no-op in release), leaving the user with an
+        // empty options dialog and no explanation. Surface a single
+        // pseudo-option that explains the problem in plain English;
+        // the Continue button stays disabled because there's nothing
+        // real to select.
+        return [
+          (
+            id: '',
+            label: t.progress.choose_one_unknown_label,
+            subtitle: t.progress.choose_one_unknown_subtitle(
+              field: from,
+            ),
+          ),
+        ];
     }
   }
 

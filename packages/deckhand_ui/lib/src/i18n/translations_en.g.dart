@@ -107,8 +107,8 @@ class TranslationsPickPrinterEn {
 	/// en: 'Show stub profiles'
 	String get show_stubs => 'Show stub profiles';
 
-	/// en: 'My printer isn't here →'
-	String get no_printer_link => 'My printer isn\'t here →';
+	/// en: 'My printer isn't here ->'
+	String get no_printer_link => 'My printer isn\'t here ->';
 
 	/// en: 'Continue'
 	String get action_continue => 'Continue';
@@ -416,8 +416,8 @@ class TranslationsFirmwareEn {
 	/// en: 'Pick your firmware'
 	String get title => 'Pick your firmware';
 
-	/// en: 'Kalico is a community-maintained Klipper fork with weekly rebases and helpful extras (gcode_shell_command, danger_options). Mainline Klipper is upstream/master - more conservative. '
-	String get helper => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master - more conservative.\n';
+	/// en: 'Kalico is a community-maintained Klipper fork. It tracks upstream fixes quickly and ships a few extras that matter on this printer. Mainline Klipper is the upstream project - more conservative, the same code everyone ships with. '
+	String get helper => 'Kalico is a community-maintained Klipper fork. It tracks upstream\nfixes quickly and ships a few extras that matter on this printer.\nMainline Klipper is the upstream project - more conservative, the\nsame code everyone ships with.\n';
 }
 
 // Path: webui
@@ -634,6 +634,12 @@ class TranslationsProgressEn {
 	final Translations _root; // ignore: unused_field
 
 	// Translations
+
+	/// en: 'Options unavailable'
+	String get choose_one_unknown_label => 'Options unavailable';
+
+	/// en: 'The profile asked for a list via `$field` but Deckhand doesn't know how to resolve that key. Check the profile or report a bug. '
+	String choose_one_unknown_subtitle({required Object field}) => 'The profile asked for a list via `${field}` but Deckhand doesn\'t\nknow how to resolve that key. Check the profile or report a bug.\n';
 
 	/// en: 'Installing...'
 	String get title_installing => 'Installing...';
@@ -1054,7 +1060,7 @@ extension on Translations {
 			'pick_printer.title' => 'Which printer are you setting up?',
 			'pick_printer.helper' => 'Deckhand supports these printers. Pick yours - we use that choice to\nload the right profile before anything else.\n',
 			'pick_printer.show_stubs' => 'Show stub profiles',
-			'pick_printer.no_printer_link' => 'My printer isn\'t here →',
+			'pick_printer.no_printer_link' => 'My printer isn\'t here ->',
 			'pick_printer.action_continue' => 'Continue',
 			'pick_printer.action_back' => 'Back',
 			'pick_printer.registry_error' => ({required Object error}) => 'Failed to load printer registry: ${error}',
@@ -1152,7 +1158,7 @@ extension on Translations {
 			'errors.sidecar_start.title' => 'Helper binary didn\'t start',
 			'errors.sidecar_rpc.title' => 'Background operation failed',
 			'firmware.title' => 'Pick your firmware',
-			'firmware.helper' => 'Kalico is a community-maintained Klipper fork with weekly rebases\nand helpful extras (gcode_shell_command, danger_options). Mainline\nKlipper is upstream/master - more conservative.\n',
+			'firmware.helper' => 'Kalico is a community-maintained Klipper fork. It tracks upstream\nfixes quickly and ships a few extras that matter on this printer.\nMainline Klipper is the upstream project - more conservative, the\nsame code everyone ships with.\n',
 			'webui.title' => 'Which web interface?',
 			'webui.helper' => 'Web dashboards for controlling the printer from a browser. They\nboth talk to the same backend (Moonraker), so you can install\nboth and switch between them any time.\n',
 			'webui.requirement_ok' => 'Pick at least one. This step cannot be skipped.',
@@ -1183,6 +1189,8 @@ extension on Translations {
 			'review.plan_empty' => 'No file-changing steps are queued for this flow.',
 			'review.confirm' => 'I understand and want to proceed.',
 			'review.action_start' => 'Start install',
+			'progress.choose_one_unknown_label' => 'Options unavailable',
+			'progress.choose_one_unknown_subtitle' => ({required Object field}) => 'The profile asked for a list via `${field}` but Deckhand doesn\'t\nknow how to resolve that key. Check the profile or report a bug.\n',
 			'progress.title_installing' => 'Installing...',
 			'progress.title_done' => 'All done',
 			'progress.title_failed' => 'Something went wrong',

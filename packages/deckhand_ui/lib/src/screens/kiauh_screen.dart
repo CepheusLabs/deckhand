@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -107,7 +108,7 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
         ),
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: () async {
           await ref
               .read(wizardControllerProvider)
@@ -116,7 +117,7 @@ class _KiauhScreenState extends ConsumerState<KiauhScreen> {
         },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/webui')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/webui')),
       ],
     );
   }

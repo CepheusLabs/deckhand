@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -55,7 +56,7 @@ class _FirstBootSetupScreenState extends ConsumerState<FirstBootSetupScreen> {
         ],
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: () async {
           final controller = ref.read(wizardControllerProvider);
           await controller.setDecision('first_boot.user', _user.text);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -70,7 +71,7 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
         ),
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: _choice == null
             ? null
             : () async {
@@ -82,7 +83,7 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
       ),
       secondaryActions: [
         WizardAction(
-          label: 'Back',
+          label: t.common.action_back,
           onPressed: () => context.go('/flash-target'),
         ),
       ],

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -123,7 +124,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         ],
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: () async {
           for (final f in files) {
             await ref.read(wizardControllerProvider).setDecision(
@@ -135,7 +136,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/services')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/services')),
       ],
     );
   }

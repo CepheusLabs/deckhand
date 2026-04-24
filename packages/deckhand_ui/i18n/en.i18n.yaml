@@ -36,7 +36,10 @@ pick_printer:
     Deckhand supports these printers. Pick yours - we use that choice to
     load the right profile before anything else.
   show_stubs: Show stub profiles
-  no_printer_link: My printer isn't here →
+  # ASCII-only arrow. The U+2192 right-arrow glyph renders
+  # inconsistently across font stacks and is the closest thing to
+  # an emoji the project allows. Plain `->` is universally safe.
+  no_printer_link: "My printer isn't here ->"
   action_continue: Continue
   action_back: Back
   registry_error: "Failed to load printer registry: $error"
@@ -274,6 +277,10 @@ review:
   action_start: Start install
 
 progress:
+  choose_one_unknown_label: Options unavailable
+  choose_one_unknown_subtitle: |
+    The profile asked for a list via `$field` but Deckhand doesn't
+    know how to resolve that key. Check the profile or report a bug.
   title_installing: Installing...
   title_done: All done
   title_failed: Something went wrong

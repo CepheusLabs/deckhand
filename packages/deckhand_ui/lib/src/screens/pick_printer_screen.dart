@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -67,7 +68,7 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
               'choice to load the right profile before anything else.',
           body: body,
           primaryAction: WizardAction(
-            label: 'Continue',
+            label: t.common.action_continue,
             onPressed: _selectedId == null
                 ? null
                 : () async {
@@ -77,7 +78,7 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
                   },
           ),
           secondaryActions: [
-            WizardAction(label: 'Back', onPressed: () => context.go('/')),
+            WizardAction(label: t.common.action_back, onPressed: () => context.go('/')),
           ],
         );
       },

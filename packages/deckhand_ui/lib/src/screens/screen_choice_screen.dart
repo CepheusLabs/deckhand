@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
@@ -112,7 +113,7 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
         ),
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: _choice == null
             ? null
             : () async {
@@ -123,7 +124,7 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
               },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/kiauh')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/kiauh')),
       ],
     );
   }

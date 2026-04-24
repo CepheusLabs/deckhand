@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
@@ -153,12 +154,12 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
               ],
             ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: () => context.go('/files'),
       ),
       secondaryActions: [
         WizardAction(
-          label: 'Back',
+          label: t.common.action_back,
           onPressed: () => context.go('/screen-choice'),
         ),
       ],

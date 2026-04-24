@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../i18n/translations.g.dart';
 import '../providers.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -54,7 +55,7 @@ class _ChoosePathScreenState extends ConsumerState<ChoosePathScreen> {
         ],
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: () {
           ref.read(wizardControllerProvider).setFlow(_choice);
           if (_choice == WizardFlow.stockKeep) {
@@ -65,7 +66,7 @@ class _ChoosePathScreenState extends ConsumerState<ChoosePathScreen> {
         },
       ),
       secondaryActions: [
-        WizardAction(label: 'Back', onPressed: () => context.go('/verify')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/verify')),
       ],
     );
   }

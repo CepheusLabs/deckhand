@@ -89,7 +89,7 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
         ),
       ),
       primaryAction: WizardAction(
-        label: 'Continue',
+        label: t.common.action_continue,
         onPressed: _choice == null
             ? null
             : () async {
@@ -101,7 +101,7 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
       ),
       secondaryActions: [
         WizardAction(
-          label: 'Back',
+          label: t.common.action_back,
           onPressed: () => context.go('/choose-path'),
         ),
       ],

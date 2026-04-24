@@ -1569,13 +1569,21 @@ class WizardController {
   }
 
   Future<void> _runVerify(Map<String, dynamic> step) async {
-    _requireSession();
+    final s = _requireSession();
     for (final v in _profile!.verifiers) {
       final kind = v.raw['kind'] as String? ?? '';
       switch (kind) {
         case 'ssh_command':
           final cmd = v.raw['command'] as String;
-          final res = await _runSsh(cmd);
+          // Verifiers are supposed to be read-only checks. If a
+          // profile author writes `sudo foo` inside a verify step,
+          // that is either a mistake or a privilege-escalation
+          // sneaking in through the back door - neither is what we
+          // want. Run via ssh.run directly (no sudo-injection strip)
+          // so any `sudo` inside the command prompts for a password
+          // and fails fast, rather than silently picking up the
+          // cached session password.
+          final res = await ssh.run(s, cmd);
           final contains = v.raw['expect_stdout_contains'] as String?;
           final equals = v.raw['expect_stdout_equals'] as String?;
           var passed = res.success;
