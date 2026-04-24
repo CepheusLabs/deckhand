@@ -365,7 +365,7 @@ void main() {
       // script lives at <repo>/shared/..., not <profile>/shared/....
       await controller.startExecution();
       expect(
-        ssh.runCalls.any((c) => c.contains('bash /tmp/deckhand-build-python.sh')),
+        ssh.runCalls.any((c) => RegExp(r'bash /tmp/deckhand-[0-9a-f]+-build-python\.sh').hasMatch(c)),
         isTrue,
       );
 
@@ -430,7 +430,7 @@ void main() {
         // The run command sets SUDO_ASKPASS + PATH prefix and points
         // at the user-space script (no outer sudo).
         final runCmd = ssh.runCalls.firstWhere(
-          (c) => c.contains('bash /tmp/deckhand-noop.sh'),
+          (c) => RegExp(r'bash /tmp/deckhand-[0-9a-f]+-noop\.sh').hasMatch(c),
         );
         expect(runCmd, contains('SUDO_ASKPASS=\'/tmp/deckhand-askpass-'));
         expect(runCmd, contains('PATH=\'/tmp/deckhand-bin-'));
@@ -478,11 +478,11 @@ void main() {
         // Use stepDetails per-call lookup so the background probe's
         // overwrite of `lastSudoPassword` can't flake the assertion.
         final call = ssh.stepDetails.firstWhere(
-          (d) => d.command.contains('bash /tmp/deckhand-rebuild.sh'),
+          (d) => RegExp(r'bash /tmp/deckhand-[0-9a-f]+-rebuild\.sh').hasMatch(d.command),
         );
         expect(call.command, contains('SUDO_ASKPASS=\'/tmp/deckhand-askpass-'));
         expect(call.command,
-            contains('sudo -A -E bash /tmp/deckhand-rebuild.sh'));
+            matches(RegExp(r'sudo -A -E bash /tmp/deckhand-[0-9a-f]+-rebuild\.sh')));
         expect(call.sudoPassword, isNull);
       },
     );
@@ -513,8 +513,8 @@ void main() {
 
       // Only the script itself is uploaded, nothing else.
       expect(ssh.uploadCalls, hasLength(1));
-      expect(ssh.uploadCalls.single.remote, '/tmp/deckhand-pure.sh');
-      expect(ssh.steps.single, 'bash /tmp/deckhand-pure.sh');
+      expect(ssh.uploadCalls.single.remote, matches(RegExp(r'^/tmp/deckhand-[0-9a-f]+-pure\.sh$')));
+      expect(ssh.steps.single, matches(RegExp(r'^bash /tmp/deckhand-[0-9a-f]+-pure\.sh$')));
     });
 
     test(
@@ -551,10 +551,10 @@ void main() {
         // call via stepDetails so the background probe can't overwrite
         // our lastSudoPassword observation.
         final call = ssh.stepDetails.singleWhere(
-          (d) => d.command.contains('bash /tmp/deckhand-rebuild.sh'),
+          (d) => RegExp(r'bash /tmp/deckhand-[0-9a-f]+-rebuild\.sh').hasMatch(d.command),
         );
         expect(call.command,
-            startsWith('-E bash /tmp/deckhand-rebuild.sh'));
+            matches(RegExp(r'^-E bash /tmp/deckhand-[0-9a-f]+-rebuild\.sh$')));
         expect(call.sudoPassword, 'root');
       },
     );

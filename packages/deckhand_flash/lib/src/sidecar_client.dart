@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:deckhand_core/deckhand_core.dart';
 import 'package:uuid/uuid.dart';
 
 /// JSON-RPC 2.0 client that spawns the Go sidecar binary and talks to it
@@ -9,13 +10,19 @@ import 'package:uuid/uuid.dart';
 ///
 /// Supports:
 ///   - request/response with id correlation
-///   - notifications (sidecar → UI) delivered via [notifications]
+///   - notifications (sidecar -> UI) delivered via [notifications]
 ///   - per-operation notification streams via [subscribeToOperation]
 ///   - error responses surfaced as [SidecarError] exceptions
 class SidecarClient {
-  SidecarClient({required this.binaryPath});
+  SidecarClient({required this.binaryPath, DeckhandLogger? logger})
+    : _logger = logger;
 
   final String binaryPath;
+
+  /// When non-null, sidecar stderr is routed through [_logger.warn];
+  /// otherwise we fall back to [stderr.writeln] so the line still
+  /// lands somewhere auditable instead of disappearing into print().
+  final DeckhandLogger? _logger;
 
   final _uuid = const Uuid();
   Process? _process;
@@ -55,14 +62,24 @@ class SidecarClient {
           onDone: _onProcessDone,
         );
 
-    // stderr → consume so the pipe doesn't fill; one-shot listener that
-    // forwards to the current process for debugging.
+    // stderr -> route through DeckhandLogger so bug reports and
+    // crash dumps can capture sidecar diagnostics without those
+    // lines leaking to stdout (which would interfere with an
+    // app-launched-from-terminal case) or to print() (flagged by
+    // avoid_print).
     _process!.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-          // ignore: avoid_print
-          print('[sidecar] $line');
+          final logger = _logger;
+          if (logger != null) {
+            logger.warn('[sidecar] $line');
+          } else {
+            // Use stderr (not print/stdout) so the line does not
+            // interfere with JSON-RPC framing on stdout and stays
+            // out of user-visible UI surfaces.
+            stderr.writeln('[sidecar] $line');
+          }
         });
 
     // Smoke test that the process responded. Timeout after 5s.
@@ -135,7 +152,10 @@ class SidecarClient {
       'params': params,
     });
     _process!.stdin.writeln(msg);
-    _process!.stdin.flush();
+    // Await the flush so the callStreaming path has the same ordering
+    // guarantees as call() - the previous unawaited flush was a
+    // latent race between stdin delivery and the completer plumbing.
+    unawaited(_process!.stdin.flush());
 
     completer.future
         .then((res) {

@@ -165,18 +165,51 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
   // captured line-by-line.
 
   Stream<FlashProgress> _runMacOs(List<String> helperArgs) async* {
-    final shell = StringBuffer(_shellQuote(helperPath));
+    // The previous implementation concatenated POSIX-single-quoted
+    // args inside an AppleScript double-quoted string and tried to
+    // escape with a bare `replaceAll('"', r'\"')`. That left
+    // AppleScript-level string-escape edge cases (backslashes,
+    // multi-byte chars) unhandled and stacked two fragile layers of
+    // quoting on top of a privilege-escalation dialog.
+    //
+    // Write a one-shot shell script to a private temp file (0700)
+    // that execs the helper with a literal argv array, then osascript
+    // only needs to quote a single controlled path. The script file
+    // is removed in a finally block regardless of outcome.
+    final tmpDir = await Directory.systemTemp.createTemp('deckhand-helper-');
+    final scriptPath = p.join(tmpDir.path, 'run.sh');
+    final script = StringBuffer('#!/bin/sh\nexec ')
+      ..write(_shellQuote(helperPath));
     for (final a in helperArgs) {
-      shell
+      script
         ..write(' ')
         ..write(_shellQuote(a));
     }
-    final script =
-        'do shell script "${shell.toString().replaceAll('"', r'\"')}" '
-        'with administrator privileges';
+    script.write('\n');
+    await File(scriptPath).writeAsString(script.toString());
+    await Process.run('chmod', ['0700', scriptPath]);
 
-    final proc = await Process.start('osascript', ['-e', script]);
-    yield* _streamLines(proc);
+    try {
+      // `quoted form of` produces a POSIX-safely-quoted version of
+      // the string for `do shell script`, so scriptPath is inert
+      // even if it ever contains a space or unusual character. The
+      // only Dart->AppleScript escaping we still need covers
+      // backslash + double-quote inside the AppleScript string
+      // literal for scriptPath itself.
+      final aquoted = scriptPath.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+      final appleScript =
+          'do shell script quoted form of "$aquoted" '
+          'with administrator privileges';
+      final proc = await Process.start('osascript', ['-e', appleScript]);
+      yield* _streamLines(proc);
+    } finally {
+      try {
+        await tmpDir.delete(recursive: true);
+      } catch (_) {
+        // Best-effort cleanup; the private temp dir will be reaped
+        // by the OS eventually if the delete fails.
+      }
+    }
   }
 
   // -----------------------------------------------------------------
@@ -274,7 +307,10 @@ FlashPhase _phaseFromString(String? s) => switch (s) {
   _ => FlashPhase.preparing,
 };
 
-String _shellQuote(String s) => "'${s.replaceAll("'", r"'\''")}'";
+// Delegate to the canonical helper in deckhand_core so every corner of
+// the app uses the same implementation. Shim kept as a thin wrapper to
+// avoid touching the call sites.
+String _shellQuote(String s) => shellSingleQuote(s);
 
 /// Quote [arg] for inclusion in a PowerShell `-ArgumentList a,b,c`
 /// literal. Double-wraps + doubles any embedded `"` per PowerShell's

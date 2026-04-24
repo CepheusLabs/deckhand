@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
@@ -143,7 +144,10 @@ class WizardController {
     // Fire the inventory probe in the background so the services /
     // files / screens screens render with machine-specific state
     // without making the user wait at the Connect step for it.
-    unawaited(_refreshPrinterState());
+    // Probe failures emit StepWarning internally; the .catchError is a
+    // belt-and-suspenders guard so a surprise sync throw at the top of
+    // _refreshPrinterState never becomes an unhandled async error.
+    unawaited(_refreshPrinterState().catchError((_) {}));
   }
 
   /// Connect with a specific username/password. Used as the fallback when
@@ -168,7 +172,10 @@ class WizardController {
     _sshPassword = password;
     _state = _state.copyWith(sshHost: host);
     _emit(SshConnected(host: host, user: session.user));
-    unawaited(_refreshPrinterState());
+    // Probe failures emit StepWarning internally; the .catchError is a
+    // belt-and-suspenders guard so a surprise sync throw at the top of
+    // _refreshPrinterState never becomes an unhandled async error.
+    unawaited(_refreshPrinterState().catchError((_) {}));
   }
 
   /// Re-run the state probe against the current SSH session. Emits
@@ -486,9 +493,12 @@ class WizardController {
   }
 
   Future<void> setDecision(String path, Object value) async {
-    final updated = Map<String, Object>.from(_state.decisions);
-    updated[path] = value;
-    _state = _state.copyWith(decisions: updated);
+    // Immutable map merge rather than Map.from() + mutate. Avoids any
+    // possibility of two concurrent calls racing on the same temporary
+    // mutable map while the copyWith is scheduled.
+    _state = _state.copyWith(
+      decisions: {..._state.decisions, path: value},
+    );
     _emit(DecisionRecorded(path: path, value: value));
   }
 
@@ -1034,6 +1044,9 @@ class WizardController {
     // Anything under the login user's home (and /tmp) is writable
     // without elevation; everything else we assume needs sudo.
     if (target.startsWith('/home/${s.user}/')) return false;
+    // root's home is /root on every distro Deckhand targets; the
+    // generic /home/<user>/ check misses it otherwise.
+    if (s.user == 'root' && target.startsWith('/root/')) return false;
     if (target.startsWith('/tmp/')) return false;
     return true;
   }
@@ -1248,8 +1261,13 @@ class WizardController {
     if (!await File(local).exists()) {
       throw StepExecutionException('script not found: $rel');
     }
-    final remote = '/tmp/deckhand-${p.basename(rel)}';
-    await ssh.upload(s, local, remote, mode: 493); // 0o755
+    // A random suffix makes the remote path unguessable so a non-root
+    // attacker on the printer cannot read (or race-overwrite) the
+    // staged script while it is still on disk. mode 0o700 - only
+    // the SSH user's shell execs it, nobody else reads or mutates.
+    final basename = p.basename(rel);
+    final remote = '/tmp/deckhand-${_randomSuffix()}-$basename';
+    await ssh.upload(s, local, remote, mode: 448); // 0o700
     final interpreter = step['interpreter'] as String? ?? 'bash';
     final extraArgs = ((step['args'] as List?) ?? const []).cast<String>();
     final ignoreErrors = step['ignore_errors'] as bool? ?? false;
@@ -1791,6 +1809,17 @@ class WizardController {
   /// Deprecated - use the canonical [shellSingleQuote] from deckhand_core.
   /// Kept as a thin shim while callers migrate off.
   String _shellQuote(String s) => shellSingleQuote(s);
+
+  /// 16 hex chars from Random.secure(). Good enough to make a `/tmp`
+  /// path unguessable for the duration of a session; cheaper than
+  /// pulling a uuid package for a single call site.
+  String _randomSuffix() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(8, (_) => rng.nextInt(256));
+    return bytes
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
 
   /// Build a `VAR=value VAR2=value2 ` prefix for a script step's
   /// `env:` map. Keys MUST match `[A-Za-z_][A-Za-z0-9_]*` (the POSIX

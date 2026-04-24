@@ -175,11 +175,32 @@ class DartsshService implements SshService {
     String? sudoPassword,
   }) async {
     final client = _requireClient(session);
-    final effectiveCmd = sudoPassword != null
-        ? 'echo ${_shellQuote(sudoPassword)} | sudo -S ${command}'
-        : command;
+
+    // Previous implementation built a single shell string of the form
+    //   echo '<password>' | sudo -S <cmd>
+    // and handed it to client.execute. That meant the cleartext
+    // password lived inside the command line of the remote process
+    // for the duration of the exec AND inside any library-level
+    // logging dartssh2 might add later. New approach: use sudo -S
+    // but write the password to stdin directly instead of piping it
+    // from an echo that lives in the command string.
+    final String effectiveCmd;
+    if (sudoPassword != null) {
+      // `cat | sudo -S` reads the password from our session stdin.
+      // `exec` swaps the process image so the original cat is gone
+      // by the time the caller's command runs.
+      effectiveCmd = 'sudo -S -p "" $command';
+    } else {
+      effectiveCmd = command;
+    }
 
     final ssh = await client.execute(effectiveCmd);
+    if (sudoPassword != null) {
+      // Feed the password + newline as the first thing sudo reads.
+      // Then close stdin so the remote `sudo` stops waiting.
+      ssh.stdin.add(utf8.encode('$sudoPassword\n'));
+      await ssh.stdin.close();
+    }
     final stdoutBytes = <int>[];
     final stderrBytes = <int>[];
     final stdoutSub = ssh.stdout.listen(stdoutBytes.addAll);
@@ -189,7 +210,7 @@ class DartsshService implements SshService {
       timeout,
       onTimeout: () {
         ssh.close();
-        throw TimeoutException('ssh.run($command) timed out after $timeout');
+        throw TimeoutException('ssh.run timed out after $timeout');
       },
     );
 
@@ -235,8 +256,15 @@ class DartsshService implements SshService {
     );
     try {
       await handle.writeBytes(bytes);
-      // Leaving chmod as a follow-up; dartssh2's SftpFileMode API varies
-      // by version and we need a compatibility matrix before wiring it.
+      // Apply mode via SFTP fsetstat the instant the data lands so
+      // there is no TOCTOU window between the write and a separate
+      // `chmod` command. The previous implementation skipped this
+      // entirely, meaning the askpass helper (which contains the SSH
+      // password in cleartext) was world-readable from write-time
+      // until a follow-up chmod ran.
+      if (mode != null) {
+        await handle.setStat(SftpFileAttrs(mode: SftpFileMode.value(mode)));
+      }
       return bytes.length;
     } finally {
       await handle.close();
@@ -282,9 +310,6 @@ class DartsshService implements SshService {
     KeyCredential(:final user) => user,
   };
 
-  // Kept as an instance method for back-compat; delegates to the
-  // library-level helper which owns the semantics + tests.
-  String _shellQuote(String s) => shellSingleQuote(s);
 }
 
 // SshAuthException was duplicated here and in deckhand_core/errors.dart.

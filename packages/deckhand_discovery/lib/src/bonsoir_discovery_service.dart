@@ -49,29 +49,46 @@ class BonsoirDiscoveryService implements DiscoveryService {
     }
   }
 
+  /// Maximum concurrent TCP probes during a CIDR scan. 64 is
+  /// comfortably below typical per-process socket limits (~1024 on
+  /// macOS/Linux by default) while still finishing a /24 scan in a
+  /// few seconds over LAN.
+  static const int _scanConcurrency = 64;
+
   @override
   Future<List<DiscoveredPrinter>> scanCidr({
     required String cidr,
     int port = 7125,
     Duration timeout = const Duration(seconds: 5),
   }) async {
-    final ips = _expandCidr(cidr);
-    final futures = ips.map((ip) async {
-      try {
-        final sock = await Socket.connect(ip, port, timeout: timeout);
-        sock.destroy();
-        return DiscoveredPrinter(
-          host: ip,
-          hostname: ip,
-          port: port,
-          service: 'moonraker?',
-        );
-      } catch (_) {
-        return null;
-      }
-    });
-    final hits = await Future.wait(futures);
-    return hits.whereType<DiscoveredPrinter>().toList();
+    final ips = _expandCidr(cidr).toList();
+    if (ips.isEmpty) return const [];
+    // A /16 would be 65_536 concurrent Socket.connect calls with the
+    // old implementation, which exhausted file descriptors on
+    // default-limit systems. Chunk through with a small pool instead.
+    final hits = <DiscoveredPrinter>[];
+    for (var i = 0; i < ips.length; i += _scanConcurrency) {
+      final end = (i + _scanConcurrency).clamp(0, ips.length);
+      final chunk = ips.sublist(i, end);
+      final results = await Future.wait(
+        chunk.map((ip) async {
+          try {
+            final sock = await Socket.connect(ip, port, timeout: timeout);
+            sock.destroy();
+            return DiscoveredPrinter(
+              host: ip,
+              hostname: ip,
+              port: port,
+              service: 'moonraker?',
+            );
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      hits.addAll(results.whereType<DiscoveredPrinter>());
+    }
+    return hits;
   }
 
   @override
@@ -106,7 +123,12 @@ class BonsoirDiscoveryService implements DiscoveryService {
     final octets = parts[0].split('.').map(int.parse).toList();
     if (octets.length != 4) return;
     final prefix = int.parse(parts[1]);
-    if (prefix < 16 || prefix > 32) return;
+    // Cap at /22 (1024 hosts). A /16 scan would enumerate 65k hosts,
+    // which is both useless on a home LAN and guaranteed to exhaust
+    // OS socket/descriptor limits even with concurrency throttled.
+    // Users who truly need to sweep large networks should narrow the
+    // CIDR before calling this API.
+    if (prefix < 22 || prefix > 32) return;
 
     final hostBits = 32 - prefix;
     final count = 1 << hostBits;
