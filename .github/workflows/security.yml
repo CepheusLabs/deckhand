@@ -28,7 +28,7 @@ jobs:
   # ---------------------------------------------------------------
   gitleaks:
     name: gitleaks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     env:
       GITLEAKS_VERSION: 8.21.2
     steps:
@@ -77,7 +77,7 @@ jobs:
   # ---------------------------------------------------------------
   trivy:
     name: trivy
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
 
@@ -114,7 +114,7 @@ jobs:
   # ---------------------------------------------------------------
   gosec:
     name: gosec
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
 
@@ -144,7 +144,7 @@ jobs:
   fuzz:
     name: Go fuzz (nightly)
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
 

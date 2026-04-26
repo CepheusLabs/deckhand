@@ -195,7 +195,7 @@ jobs:
     name: Notify on nightly failure
     needs: matrix
     if: failure() && github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
       - name: Open or update tracking issue

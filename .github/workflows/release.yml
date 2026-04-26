@@ -33,7 +33,12 @@ jobs:
   # ------------------------------------------------------------------
   version:
     name: Compute version
-    runs-on: ubuntu-latest
+    # Self-hosted runners only across the org. GitHub-hosted
+    # `ubuntu-latest`/`windows-latest`/`macos-latest` are not used
+    # — those would charge against the org's billing minutes and
+    # are explicitly off-policy. If a target OS has no runner
+    # registered the job queues forever; that's by design.
+    runs-on: [self-hosted, linux]
     outputs:
       version: ${{ steps.v.outputs.version }}
       build: ${{ steps.v.outputs.build }}
@@ -64,15 +69,24 @@ jobs:
   go-binaries:
     name: Go ${{ matrix.goos }}-${{ matrix.goarch }}
     needs: version
-    runs-on: ${{ matrix.runner }}
+    # `fromJSON` parses the per-row JSON-string into a label
+    # sequence so `runs-on` matches the multi-label runner
+    # registration. A bare string here would only match a label
+    # that's literally `["self-hosted","windows"]`.
+    runs-on: ${{ fromJSON(matrix.runner) }}
     strategy:
       fail-fast: false
       matrix:
+        # Self-hosted runner labels per target. Each row's `runner`
+        # is the JSON-encoded label tuple GitHub's runner picker
+        # reads. Keeping the matrix in this shape (vs. one job per
+        # OS) preserves the parallelism — every Go binary builds
+        # in parallel on its own runner.
         include:
-          - { goos: windows, goarch: amd64, runner: windows-latest, ext: ".exe" }
-          - { goos: darwin,  goarch: amd64, runner: macos-latest,   ext: ""     }
-          - { goos: darwin,  goarch: arm64, runner: macos-latest,   ext: ""     }
-          - { goos: linux,   goarch: amd64, runner: ubuntu-latest,  ext: ""     }
+          - { goos: windows, goarch: amd64, runner: '["self-hosted","windows"]', ext: ".exe" }
+          - { goos: darwin,  goarch: amd64, runner: '["self-hosted","macos"]',   ext: ""     }
+          - { goos: darwin,  goarch: arm64, runner: '["self-hosted","macos"]',   ext: ""     }
+          - { goos: linux,   goarch: amd64, runner: '["self-hosted","linux"]',   ext: ""     }
     steps:
       - uses: actions/checkout@v5
         with:
@@ -111,7 +125,7 @@ jobs:
   windows:
     name: Windows (MSI)
     needs: [version, go-binaries]
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows]
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.version.outputs.ref }}" }
@@ -188,7 +202,7 @@ jobs:
   macos:
     name: macOS (DMG)
     needs: [version, go-binaries]
-    runs-on: macos-latest
+    runs-on: [self-hosted, macos]
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -274,7 +288,7 @@ jobs:
   linux:
     name: Linux (AppImage)
     needs: [version, go-binaries]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.version.outputs.ref }}" }
@@ -351,7 +365,7 @@ jobs:
   release:
     name: Publish release
     needs: [version, windows, macos, linux]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
         with:

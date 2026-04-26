@@ -19,8 +19,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+        # The org's policy is "self-hosted runners only — no
+        # GitHub-hosted minutes are paid for." Each row pairs the
+        # OS-shorthand label (used in conditionals like
+        # `if: matrix.os == 'linux'`) with the runner-label tuple
+        # GitHub uses to pick a physical runner. If a target OS
+        # has no registered runner the job queues forever — that's
+        # by design.
+        include:
+          - os: linux
+            runs-on: [self-hosted, linux]
+          - os: macos
+            runs-on: [self-hosted, macos]
+          - os: windows
+            runs-on: [self-hosted, windows]
+    runs-on: ${{ matrix.runs-on }}
     defaults:
       run:
         working-directory: sidecar
@@ -45,7 +58,7 @@ jobs:
         run: go test -race -count=1 -coverprofile=coverage.out ./...
 
       - name: Coverage gate (overall + per-package)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'linux'
         shell: bash
         run: |
           set -euo pipefail
@@ -85,14 +98,14 @@ jobs:
           done
 
       - uses: golangci/golangci-lint-action@v6
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'linux'
         with:
           version: v2.1.6
           working-directory: sidecar
           args: --timeout=5m
 
       - name: Verify IPC-METHODS.md is up-to-date
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'linux'
         run: |
           go run ./cmd/deckhand-ipc-docs --check
         working-directory: sidecar
@@ -103,7 +116,11 @@ jobs:
   # ---------------------------------------------------------------
   flutter:
     name: Flutter packages
-    runs-on: ubuntu-latest
+    # Self-hosted only. Flutter analyze/test is platform-agnostic
+    # so any runner OS works; we pin to the Linux self-hosted
+    # runner because the `app` matrix entry calls
+    # `apt-get install` for libgtk-3-dev/libsecret-1-dev.
+    runs-on: [self-hosted, linux]
     strategy:
       matrix:
         package:
@@ -210,7 +227,7 @@ jobs:
   # ---------------------------------------------------------------
   scripts:
     name: Python scripts
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
 
@@ -223,7 +240,7 @@ jobs:
 
   profile-lint:
     name: Profile YAML lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
 
