@@ -93,7 +93,7 @@ class _FlashConfirmScreenState extends ConsumerState<FlashConfirmScreen> {
             : null,
       ),
       secondaryActions: [
-        WizardAction(label: t.common.action_back, onPressed: () => context.go('/choose-os')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/choose-os'), isBack: true),
       ],
     );
   }

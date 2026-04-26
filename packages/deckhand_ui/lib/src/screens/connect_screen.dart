@@ -383,6 +383,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/pick-printer'),
+          isBack: true,
         ),
       ],
     );
@@ -487,7 +488,7 @@ class _DiscoveredCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (stateChip != null) stateChip,
+                      ?stateChip,
                     ],
                   ),
                   const SizedBox(height: 4),

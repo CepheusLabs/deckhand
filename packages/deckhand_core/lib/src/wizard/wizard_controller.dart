@@ -12,12 +12,25 @@ import '../services/elevated_helper_service.dart';
 import '../services/flash_service.dart';
 import '../services/moonraker_service.dart';
 import '../services/profile_service.dart';
+import '../services/archive_service.dart';
 import '../services/security_service.dart';
 import '../services/ssh_service.dart';
 import '../services/upstream_service.dart';
 import '../shell/shell_quoting.dart';
 import 'dsl.dart';
+import 'pending_input.dart';
 import 'printer_state_probe.dart';
+import 'run_state.dart';
+import 'wizard_events.dart';
+import 'wizard_flow.dart';
+import 'wizard_state.dart';
+
+// Re-exported so existing `package:deckhand_core/deckhand_core.dart`
+// imports keep resolving WizardFlow / WizardState / WizardStateStore /
+// WizardEvent / StepExecutionException without touching call sites.
+export 'wizard_events.dart';
+export 'wizard_flow.dart';
+export 'wizard_state.dart';
 
 // Method bodies for backup management (restoreBackup, readBackupContent,
 // deleteBackup, pruneBackups) live in a separate file so the main
@@ -31,9 +44,6 @@ part 'wizard_controller_backup.dart';
 // for the same reason. Same `part of` scope-sharing applies.
 part 'wizard_controller_steps.dart';
 
-/// Which high-level flow the wizard is running.
-enum WizardFlow { none, stockKeep, freshFlash }
-
 /// Wizard state machine - profile-driven, UI-agnostic.
 class WizardController {
   WizardController({
@@ -45,7 +55,12 @@ class WizardController {
     required this.upstream,
     required this.security,
     this.elevatedHelper,
-  });
+    this.archive,
+    this.snapshotsDir,
+    this.deckhandVersion = 'unknown',
+  }) {
+    _runStateStore = RunStateStore(ssh: ssh);
+  }
 
   final ProfileService profiles;
   final SshService ssh;
@@ -59,9 +74,31 @@ class WizardController {
   /// helper (UAC / pkexec / osascript). Tests leave this null.
   final ElevatedHelperService? elevatedHelper;
 
+  /// Optional: stock-config snapshot capture/restore (the S145 path).
+  /// When null, `snapshot_archive` step kinds are surfaced as a
+  /// StepWarning rather than failing — profiles with no snapshot
+  /// step still install cleanly.
+  final ArchiveService? archive;
+
+  /// Where on the host to write captured snapshot archives. Production
+  /// wiring sets this to `<data_dir>/state/snapshots/`. When null and
+  /// a `snapshot_archive` step fires, the controller emits a warning
+  /// and skips the capture.
+  final String? snapshotsDir;
+
+  /// Surfaced into the on-printer run-state file's
+  /// `deckhand_version` field so a maintainer reading a debug
+  /// bundle can correlate the install attempt with a release.
+  /// Production wiring fills this from CalVer; tests leave it as
+  /// `unknown`, which is fine — the field is informational.
+  final String deckhandVersion;
+
+  late final RunStateStore _runStateStore;
+  RunState? _runState;
+
   late final DslEvaluator _dsl = DslEvaluator(defaultPredicates());
   final _eventsController = StreamController<WizardEvent>.broadcast();
-  final _pendingInput = <String, Completer<Object?>>{};
+  final _pendingInput = PendingInputRegistry();
 
   PrinterProfile? _profile;
   ProfileCacheEntry? _profileCache;
@@ -93,6 +130,13 @@ class WizardController {
   PrinterState get printerState => _printerState;
   Stream<WizardEvent> get events => _eventsController.stream;
 
+  /// Live SSH session, if any. Set by [connectSsh] / [connectSshWithPassword]
+  /// and cleared on disconnect. Screens that need to probe the printer
+  /// outside of a step (e.g. the S145 snapshot size estimate) read this
+  /// directly rather than holding their own copy. Returns null when no
+  /// session is open — callers must handle this defensively.
+  SshSession? get sshSession => _session;
+
   /// Test-only: inject a canned [PrinterState] so widget tests can
   /// exercise probe-driven UI branches without standing up an SSH
   /// session. Emits [PrinterStateRefreshed] so screens that watch
@@ -111,6 +155,41 @@ class WizardController {
       _emit(PrinterStateRefreshed(value));
       return true;
     }());
+  }
+
+  /// Seed the controller from a persisted [WizardState] snapshot and
+  /// reload the underlying profile so the wizard's screens have
+  /// something to render against. The SSH session and all secrets
+  /// (passwords, confirmation tokens) are deliberately NOT part of
+  /// the snapshot, so resuming always lands the user on the connect
+  /// screen with a re-prompt — never past an authentication gate.
+  ///
+  /// Throws [ResumeFailedException] (with the original cause attached
+  /// and the snapshot still resident in `state` so the caller can
+  /// retry or render an error UX) when the profile fails to reload.
+  /// The previous behaviour of silently falling back to
+  /// [WizardState.initial] threw away the user's session — that's
+  /// worse than blank, so we now surface the failure loudly.
+  Future<void> restore(WizardState snapshot) async {
+    _state = snapshot;
+    if (snapshot.profileId.isEmpty) {
+      _emit(FlowChanged(_state.flow));
+      return;
+    }
+    try {
+      await loadProfile(snapshot.profileId);
+      // loadProfile resets currentStep to whatever copyWith default
+      // it picks. Re-apply the snapshot so the saved currentStep
+      // wins — the user lands where they left off.
+      _state = snapshot;
+    } catch (e, st) {
+      throw ResumeFailedException(
+        snapshot: snapshot,
+        cause: e,
+        stackTrace: st,
+      );
+    }
+    _emit(FlowChanged(_state.flow));
   }
 
   Future<void> loadProfile(String profileId, {String? ref}) async {
@@ -425,9 +504,24 @@ class WizardController {
 
   /// Resolve an outstanding user-input request. UI code calls this when
   /// the user has made a decision for a UI-driven step.
-  void resolveUserInput(String stepId, Object? value) {
-    final completer = _pendingInput.remove(stepId);
-    completer?.complete(value);
+  void resolveUserInput(String stepId, Object? value) =>
+      _pendingInput.resolve(stepId, value);
+
+  bool _cancelled = false;
+  String? _cancelReason;
+
+  /// Abort the in-flight [startExecution] cleanly. The current step
+  /// finishes (or its `await` completes), then the loop bails before
+  /// dispatching the next step with a [WizardCancelledException].
+  /// Idempotent — second call has no extra effect.
+  ///
+  /// Used by the HITL driver when a step fires [UserInputRequired]
+  /// without the scenario having pre-decided the answer; production
+  /// flows would call this from a "Cancel install" button on S900.
+  void cancelExecution({String reason = 'cancelled'}) {
+    if (_cancelled) return;
+    _cancelled = true;
+    _cancelReason = reason;
   }
 
   Future<void> startExecution() async {
@@ -440,22 +534,146 @@ class WizardController {
       throw StateError('Flow ${_state.flow} is not enabled for this profile.');
     }
 
+    // Bootstrap run-state. Loading first lets a re-run on the same
+    // printer pick up the prior history; if there's no SSH session
+    // yet (some flows reach startExecution before connect — e.g.
+    // fresh_flash, where connect happens mid-flow at S240), we'll
+    // start an empty state in memory and writes are a no-op until
+    // a session arrives via [_runStateAttachSession]. The store
+    // itself is tolerant of "no file yet" as well.
+    await _runStateBootstrap();
+
     for (final step in flow.steps) {
+      if (_cancelled) {
+        throw WizardCancelledException(_cancelReason ?? 'cancelled');
+      }
       final id = step['id'] as String? ?? 'unnamed';
       final kind = step['kind'] as String? ?? '';
       _currentStepKind = kind;
       _emit(StepStarted(id));
+      final hash = canonicalInputHash(_canonicalStepInputs(step));
+      await _runStateRecord(
+        RunStateStep(
+          id: id,
+          status: RunStateStatus.inProgress,
+          startedAt: DateTime.now().toUtc(),
+          inputHash: hash,
+        ),
+      );
       try {
         await _runStep(step);
         _emit(StepCompleted(id));
+        await _runStateRecord(
+          RunStateStep(
+            id: id,
+            status: RunStateStatus.completed,
+            startedAt: _runState?.lastFor(id)?.startedAt ?? DateTime.now().toUtc(),
+            finishedAt: DateTime.now().toUtc(),
+            inputHash: hash,
+          ),
+        );
       } catch (e) {
         _emit(StepFailed(stepId: id, error: '$e'));
+        await _runStateRecord(
+          RunStateStep(
+            id: id,
+            status: RunStateStatus.failed,
+            startedAt: _runState?.lastFor(id)?.startedAt ?? DateTime.now().toUtc(),
+            finishedAt: DateTime.now().toUtc(),
+            inputHash: hash,
+            error: '$e',
+          ),
+        );
         rethrow;
       } finally {
         _currentStepKind = null;
       }
     }
     _emit(const ExecutionCompleted());
+  }
+
+  /// Initialise [_runState] for the active session. Best-effort:
+  /// tolerates "no SSH yet", "file missing", "file unparseable".
+  Future<void> _runStateBootstrap() async {
+    final pf = _profile;
+    final cache = _profileCache;
+    final session = _session;
+    final fresh = RunState.empty(
+      deckhandVersion: deckhandVersion,
+      profileId: pf?.id ?? '',
+      profileCommit: cache?.resolvedSha ?? '',
+    );
+    if (session == null) {
+      _runState = fresh;
+      return;
+    }
+    try {
+      _runState = await _runStateStore.load(session) ?? fresh;
+    } on Object {
+      _runState = fresh;
+    }
+  }
+
+  /// Persist [step] into the run-state file. Errors are swallowed
+  /// (logged via StepWarning) — a transient SSH glitch must not
+  /// abort the install. The next successful write replays the full
+  /// state, so a missed write is recoverable.
+  Future<void> _runStateRecord(RunStateStep step) async {
+    final state = _runState;
+    final session = _session;
+    if (state == null || session == null) return;
+    final next = state.upsertingLast(step);
+    _runState = next;
+    try {
+      await _runStateStore.save(session, next);
+    } on Object catch (e) {
+      _emit(StepWarning(
+        stepId: step.id,
+        message: 'run-state write failed (continuing): $e',
+      ));
+    }
+  }
+
+  /// Build the canonical-input map for a step. Used to compute the
+  /// input hash that distinguishes "user changed their mind, re-run"
+  /// from "user is just retrying with the same inputs."
+  ///
+  /// Resolution order (most specific first):
+  ///   1. The step declares `idempotency.inputs` — use that
+  ///      verbatim. Profile authors fully own the contract.
+  ///   2. The step declares `decision_keys: [a, b, c]` — hash
+  ///      `kind + id + the listed decisions`.
+  ///   3. Default — hash `kind + id + the entire decision graph`.
+  ///      The full graph is the conservative choice: any decision
+  ///      change anywhere will invalidate every downstream step's
+  ///      hash, which is loud but safe (resume will re-run, not
+  ///      silently skip stale work). Profiles that want a tighter
+  ///      contract opt into one of the more-specific paths above.
+  ///
+  /// The previous default (`{kind, id}`) was constant across
+  /// attempts of the same step, making the input-hash comparison
+  /// useless. See `docs/STEP-IDEMPOTENCY.md` for the rationale.
+  Map<String, Object?> _canonicalStepInputs(Map<String, dynamic> step) {
+    final declared = step['idempotency'];
+    if (declared is Map && declared['inputs'] is Map) {
+      return (declared['inputs'] as Map).cast<String, Object?>();
+    }
+    final base = <String, Object?>{
+      'kind': step['kind'],
+      'id': step['id'],
+    };
+    if (step['decision_keys'] is List) {
+      for (final key in (step['decision_keys'] as List)) {
+        base['decision.$key'] = _state.decisions[key.toString()];
+      }
+      return base;
+    }
+    // Fall through: include the entire decision graph. Sorted
+    // canonicalisation (in canonicalInputBytes) makes the order
+    // irrelevant, so two runs with identical decisions produce
+    // identical hashes.
+    base['decisions'] = _state.decisions;
+    return base;
   }
 
   Future<void> _runStep(Map<String, dynamic> step) async {
@@ -466,6 +684,8 @@ class WizardController {
         await _runSshCommands(step);
       case 'snapshot_paths':
         await _runSnapshotPaths(step);
+      case 'snapshot_archive':
+        await _runSnapshotArchive(step);
       case 'install_firmware':
         await _runInstallFirmware(step);
       case 'link_extras':
@@ -557,6 +777,102 @@ class WizardController {
         );
       }
     }
+  }
+
+  /// Capture the user's S145-selected paths into a host-local
+  /// `.tar.gz`. The user's selection lives at
+  /// `_state.decisions['snapshot.paths']` (a list of snapshot-path
+  /// IDs); we resolve each ID against `profile.stockOs.snapshotPaths`
+  /// to get the actual on-printer path, then stream the archive home
+  /// via [ArchiveService.captureRemote].
+  ///
+  /// Failure modes:
+  ///   - No archive service wired: warn + skip (profile installs work
+  ///     without snapshots; the user just doesn't get a config backup).
+  ///   - No paths declared / no IDs selected: warn + skip.
+  ///   - Capture fails: hard error so the user sees it before the
+  ///     install rewrites their config.
+  Future<void> _runSnapshotArchive(Map<String, dynamic> step) async {
+    _requireSession();
+    final svc = archive;
+    final dir = snapshotsDir;
+    if (svc == null || dir == null) {
+      _emit(StepWarning(
+        stepId: step['id'] as String? ?? 'snapshot_archive',
+        message: 'archive service not wired; skipping snapshot capture '
+            '(install will proceed but config backup is your problem)',
+      ));
+      return;
+    }
+    final pf = _profile;
+    if (pf == null) throw StateError('no profile loaded');
+    final selectedRaw = _state.decisions['snapshot.paths'];
+    final selectedIds = <String>[];
+    if (selectedRaw is List) {
+      for (final v in selectedRaw) {
+        selectedIds.add(v.toString());
+      }
+    }
+    if (selectedIds.isEmpty) {
+      _emit(StepWarning(
+        stepId: step['id'] as String? ?? 'snapshot_archive',
+        message: 'no snapshot paths selected; nothing to archive',
+      ));
+      return;
+    }
+    final byId = {for (final p in pf.stockOs.snapshotPaths) p.id: p};
+    final paths = <String>[];
+    for (final id in selectedIds) {
+      final p = byId[id];
+      if (p == null) {
+        _emit(StepWarning(
+          stepId: step['id'] as String? ?? 'snapshot_archive',
+          message: 'snapshot id "$id" not in profile; ignoring',
+        ));
+        continue;
+      }
+      paths.add(p.path);
+    }
+    if (paths.isEmpty) return;
+
+    final tsLabel = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .split('.')
+        .first;
+    final session = _session!;
+    final archivePath = p.join(
+      dir,
+      '${pf.id}-$tsLabel.tar.gz',
+    );
+
+    var totalBytes = 0;
+    await for (final progress in svc.captureRemote(
+      session: session,
+      paths: paths,
+      archivePath: archivePath,
+    )) {
+      totalBytes = progress.bytesCaptured;
+      _emit(StepProgress(
+        stepId: step['id'] as String? ?? 'snapshot_archive',
+        percent: 0,
+        message: '${(progress.bytesCaptured / 1024).toStringAsFixed(0)} KiB captured',
+      ));
+    }
+    final sha = await svc.archiveSha256(archivePath);
+    _log(step,
+        '[snapshot_archive] wrote $archivePath ($totalBytes bytes, sha256=$sha)');
+    // Surface the archive path back into wizard state so the
+    // post-install restore step (and the debug-bundle assembler)
+    // can reference it.
+    _state = _state.copyWith(
+      decisions: {
+        ..._state.decisions,
+        'snapshot.archive_path': archivePath,
+        'snapshot.archive_sha256': sha,
+      },
+    );
   }
 
   Future<void> _runInstallFirmware(Map<String, dynamic> step) async {
@@ -869,10 +1185,11 @@ class WizardController {
       host: host,
       timeout: Duration(seconds: timeoutSecs),
     );
-    if (!ok)
+    if (!ok) {
       throw StepExecutionException(
         'ssh did not come up within $timeoutSecs seconds',
       );
+    }
     _log(step, '[ssh] up at $host');
   }
 
@@ -895,10 +1212,12 @@ class WizardController {
           final contains = v.raw['expect_stdout_contains'] as String?;
           final equals = v.raw['expect_stdout_equals'] as String?;
           var passed = res.success;
-          if (contains != null)
+          if (contains != null) {
             passed = passed && res.stdout.contains(contains);
-          if (equals != null)
+          }
+          if (equals != null) {
             passed = passed && res.stdout.trim() == equals.trim();
+          }
           _log(step, '[verify] ${v.id}: ${passed ? "PASS" : "FAIL"}');
           if (!passed && !(v.raw['optional'] as bool? ?? false)) {
             throw StepExecutionException('verifier ${v.id} failed');
@@ -950,12 +1269,8 @@ class WizardController {
     }
   }
 
-  Future<Object?> _awaitUserInput(String id, Map<String, dynamic> step) async {
-    final completer = Completer<Object?>();
-    _pendingInput[id] = completer;
-    _emit(UserInputRequired(stepId: id, step: step));
-    return completer.future;
-  }
+  Future<Object?> _awaitUserInput(String id, Map<String, dynamic> step) =>
+      _pendingInput.awaitInput(id, step, _emit);
 
   /// Runs [command] over SSH. If [command] starts with `sudo`,
   /// `/usr/bin/sudo`, or `/bin/sudo` and we have a cached password
@@ -1043,7 +1358,7 @@ class WizardController {
   ///   - profile-local (`./scripts/foo.sh`): resolved against the
   ///     profile's directory (where profile.yaml lives).
   ///   - repo-root-relative (`shared/scripts/build-python.sh`): resolved
-  ///     against the deckhand-builds repo root. Profile dirs live at
+  ///     against the deckhand-profiles repo root. Profile dirs live at
   ///     `<root>/printers/<id>/`, so the repo root is two levels up.
   ///
   /// Bare paths without a prefix default to profile-local (the legacy
@@ -1274,131 +1589,10 @@ class _ScriptSudoHelper {
   final String binDir;
 }
 
-class WizardState {
-  const WizardState({
-    required this.profileId,
-    required this.decisions,
-    required this.currentStep,
-    required this.flow,
-    this.sshHost,
-  });
+// WizardState and WizardStateStore have been extracted to their own
+// file (wizard_state.dart) and are re-exported at the top of this
+// library so existing imports continue to resolve.
 
-  factory WizardState.initial() => const WizardState(
-    profileId: '',
-    decisions: {},
-    currentStep: 'welcome',
-    flow: WizardFlow.none,
-  );
-
-  final String profileId;
-  final Map<String, Object> decisions;
-  final String currentStep;
-  final WizardFlow flow;
-  final String? sshHost;
-
-  WizardState copyWith({
-    String? profileId,
-    Map<String, Object>? decisions,
-    String? currentStep,
-    WizardFlow? flow,
-    String? sshHost,
-  }) => WizardState(
-    profileId: profileId ?? this.profileId,
-    decisions: decisions ?? this.decisions,
-    currentStep: currentStep ?? this.currentStep,
-    flow: flow ?? this.flow,
-    sshHost: sshHost ?? this.sshHost,
-  );
-}
-
-class StepExecutionException implements Exception {
-  StepExecutionException(this.message, {this.stderr});
-  final String message;
-  final String? stderr;
-  @override
-  String toString() =>
-      'StepExecutionException: $message${stderr != null && stderr!.isNotEmpty ? "\n$stderr" : ""}';
-}
-
-sealed class WizardEvent {
-  const WizardEvent();
-}
-
-class ProfileLoaded extends WizardEvent {
-  const ProfileLoaded(this.profile);
-  final PrinterProfile profile;
-}
-
-class SshConnected extends WizardEvent {
-  const SshConnected({required this.host, required this.user});
-  final String host;
-  final String user;
-}
-
-class DecisionRecorded extends WizardEvent {
-  const DecisionRecorded({required this.path, required this.value});
-  final String path;
-  final Object value;
-}
-
-class FlowChanged extends WizardEvent {
-  const FlowChanged(this.flow);
-  final WizardFlow flow;
-}
-
-class StepStarted extends WizardEvent {
-  const StepStarted(this.stepId);
-  final String stepId;
-}
-
-class StepProgress extends WizardEvent {
-  const StepProgress({
-    required this.stepId,
-    required this.percent,
-    this.message,
-  });
-  final String stepId;
-  final double percent;
-  final String? message;
-}
-
-class StepLog extends WizardEvent {
-  const StepLog({required this.stepId, required this.line});
-  final String stepId;
-  final String line;
-}
-
-class StepCompleted extends WizardEvent {
-  const StepCompleted(this.stepId);
-  final String stepId;
-}
-
-class StepFailed extends WizardEvent {
-  const StepFailed({required this.stepId, required this.error});
-  final String stepId;
-  final String error;
-}
-
-class StepWarning extends WizardEvent {
-  const StepWarning({required this.stepId, required this.message});
-  final String stepId;
-  final String message;
-}
-
-class UserInputRequired extends WizardEvent {
-  const UserInputRequired({required this.stepId, required this.step});
-  final String stepId;
-  final Map<String, dynamic> step;
-}
-
-class ExecutionCompleted extends WizardEvent {
-  const ExecutionCompleted();
-}
-
-/// Emitted once the state probe lands fresh data. Screens watching
-/// `wizardStateProvider` rebuild on this (via the generic stream)
-/// and re-render with machine-specific state applied.
-class PrinterStateRefreshed extends WizardEvent {
-  const PrinterStateRefreshed(this.state);
-  final PrinterState state;
-}
+// WizardEvent hierarchy and StepExecutionException have been
+// extracted to wizard_events.dart and re-exported at the top of this
+// file.

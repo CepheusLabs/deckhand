@@ -1,9 +1,9 @@
-/// Launches the `deckhand-elevated-helper` binary with platform-native
-/// privilege elevation (UAC on Windows, osascript on macOS, pkexec on
-/// Linux) to perform raw-device writes.
-///
-/// The sidecar itself runs unprivileged; only this helper binary needs
-/// admin/root. See [docs/ARCHITECTURE.md] for the threat model.
+// Launches the `deckhand-elevated-helper` binary with platform-native
+// privilege elevation (UAC on Windows, osascript on macOS, pkexec on
+// Linux) to perform raw-device writes.
+//
+// The sidecar itself runs unprivileged; only this helper binary needs
+// admin/root. See docs/ARCHITECTURE.md for the threat model.
 import 'flash_service.dart';
 
 abstract class ElevatedHelperService {

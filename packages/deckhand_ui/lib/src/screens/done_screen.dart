@@ -1,11 +1,12 @@
+import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
-import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
+import '../widgets/wizard_scaffold.dart';
 
 class DoneScreen extends ConsumerWidget {
   const DoneScreen({super.key});
@@ -78,10 +79,10 @@ class DoneScreen extends ConsumerWidget {
   /// Build a per-webui tip line keyed off the user's actual decisions
   /// so we never surface a URL for something they chose not to
   /// install.
-  List<String> _buildWebuiTips(dynamic profile, dynamic state) {
+  List<String> _buildWebuiTips(PrinterProfile? profile, WizardState state) {
     if (profile == null) return const [];
     final stack = profile.stack;
-    final webui = stack?.webui;
+    final webui = stack.webui;
     if (webui == null) return const [];
     final choices = (webui['choices'] as List?)?.cast<Map>() ?? const [];
     if (choices.isEmpty) return const [];

@@ -50,7 +50,7 @@ void main() {
         ],
       });
       await probe.probe(
-        session: SshSession(id: 't', host: 'x', port: 22, user: 'u'),
+        session: const SshSession(id: 't', host: 'x', port: 22, user: 'u'),
         profile: profile,
       );
       script = ssh.captured!;
@@ -216,6 +216,9 @@ class _CapturingSsh implements SshService {
     String remotePath,
     String localPath,
   ) async => 0;
+  @override
+  Future<Map<String, int>> duPaths(SshSession session, List<String> paths) async =>
+      {for (final p in paths) p: 0};
   @override
   Future<void> disconnect(SshSession session) async {}
 }

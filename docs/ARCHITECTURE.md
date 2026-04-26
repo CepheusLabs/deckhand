@@ -65,7 +65,7 @@ deckhand/
 │   ├── ARCHITECTURE.md                  # this file
 │   ├── WIZARD-FLOW.md                   # screen-by-screen UX spec
 │   ├── IPC.md                           # sidecar JSON-RPC method catalog
-│   ├── PROFILE-SCHEMA.md                # profile.yaml spec (content authored in deckhand-builds, lives here)
+│   ├── PROFILE-SCHEMA.md                # profile.yaml spec (content authored in deckhand-profiles, lives here)
 │   └── RELEASING.md                     # versioning, tagging, CI
 ├── app/                                 # Deckhand desktop app
 │   ├── pubspec.yaml                     # depends on deckhand_* packages
@@ -280,7 +280,7 @@ isolates any privileged code from the sidecar's larger attack surface.
 ```
 <data_dir>/
 ├── cache/
-│   ├── profiles/<tag>/                # cached deckhand-builds checkouts
+│   ├── profiles/<tag>/                # cached deckhand-profiles checkouts
 │   ├── os-images/                     # verified OS images
 │   └── upstream/                      # cloned klipper/kalico/etc
 ├── state/
@@ -297,7 +297,7 @@ redirect cache/state into temp directories.
 
 Deckhand never bundles profile content. On demand:
 
-1. Fetch `registry.yaml` from `CepheusLabs/deckhand-builds` main (tiny file).
+1. Fetch `registry.yaml` from `CepheusLabs/deckhand-profiles` main (tiny file).
 2. Resolve the latest semver tag (or a user-pinned tag).
 3. Shallow-clone that tag into the cache via the sidecar's `profiles.fetch`
    (`go-git` with `depth=1`).
@@ -356,13 +356,32 @@ Sidecar is bundled alongside the app binary. On install:
 - **Destructive-op confirmation tokens** - sidecar methods like
   `disks.write_image` require a `confirmation_token` issued by a UI-only
   dialog, single-use, 60s TTL.
+- **Disk safety preflight** - before any `disks.write_image` elevation
+  prompt, the sidecar runs `disks.safety_check` against the target disk
+  info. Oversized disks (>512 GiB), zero-size disks, disks mounted at
+  `/`, `/boot`, `/home`, or `C:\`, and non-removable disks on Windows
+  are rejected outright. Sizes in the 128–512 GiB band trigger a
+  warning the UI must surface before letting the user continue. This
+  is defense-in-depth against typos between screens — the primary gate
+  is still the user-facing confirmation.
+- **Signed-tag profile fetch** - `profiles.fetch` optionally takes a
+  `trusted_keys` (armored PGP keyring) and `require_signed_tag` flag.
+  When set, the resolved ref must be an annotated, signed tag whose
+  signature verifies against the trusted keyring; lightweight tags and
+  branches are rejected. Returns the signer fingerprint in
+  `verified_by` so the UI can audit-log which maintainer key was used.
 - **SSH host key pinning** - first-connection prompt, stored fingerprint in
   `state/known_hosts.json`.
 - **Profile integrity** - tagged profile checkouts are immutable once
   published; Deckhand records the resolved commit SHA in each operation log.
 - **No unauthenticated code execution** - scripts from profiles are executed
   only with explicit user consent in the UI, with their source hash
-  displayed.
+  displayed. **v1 hard-disables the profile-script runtime entirely**
+  (see `packages/deckhand_profile_script/lib/src/runtime.dart`). The
+  API surface ships so profile authors can compile against a stable
+  contract, but `ProfileScriptRuntime.loadScript` throws
+  `ProfileScriptDisabledException` until a capability-scoped isolate
+  sandbox, static-analysis pass, and signed-tag gating all ship together.
 - **Network allow-list (strict by default)** - Deckhand ships with an empty
   host allow-list. Any outbound connection (GitHub, Armbian mirror, the
   printer's IP, etc.) triggers a one-time "Allow this host?" prompt in the
@@ -371,6 +390,40 @@ Sidecar is bundled alongside the app binary. On install:
   declare their required hosts up front (`profile.yaml` field) so the
   wizard can batch-approve them at install start with one prompt instead of
   many per-step interruptions.
+- **Dry-run mode** - the `dry_run` setting routes every destructive
+  operation through a synthetic progress stream instead of the sidecar
+  (see `SidecarFlashService.dryRun`). A persistent banner on every
+  wizard screen makes it impossible to forget the setting is on.
+  Intended for profile authors testing against a real printer without
+  reflashing.
+- **Session resume** - wizard state is persisted atomically (tmp →
+  rename) to `state/wizard_session.json` after every transition. If the
+  app crashes mid-flow the next launch offers to resume from the saved
+  decisions. Secrets (SSH password, confirmation tokens,
+  in-flight elevated-helper handles) are NEVER serialized — see
+  `WizardState.toJson` — so resume can never bypass a re-authentication
+  prompt or replay a single-use token.
+- **Interrupted-flash detection** - the UI persists a sentinel file
+  at `<data_dir>/Deckhand/state/flash-sentinels/<safe_disk_id>.json`
+  immediately before launching the elevated helper, and clears it
+  only after observing `event: done` from the helper. A sentinel
+  surviving past helper exit indicates a crash or power loss
+  mid-write. The sidecar's `disks.list` joins sentinels onto the
+  enumeration result via the `interrupted_flash` field
+  ([IPC.md:99](IPC.md:99)) so the UI can warn the user that the disk
+  is in unknown state before they reuse it. Sentinels older than
+  seven days are silently retired so a forgotten failure doesn't
+  poison every future enumeration. Implementation:
+  [`sidecar/internal/disks/sentinel.go`](../sidecar/internal/disks/sentinel.go)
+  + [`packages/deckhand_flash/lib/src/flash_sentinel.dart`](../packages/deckhand_flash/lib/src/flash_sentinel.dart).
+- **Release-artifact integrity** - the release workflow emits a
+  `SHA256SUMS` of every artifact plus (when GPG keys are configured) a
+  detached `SHA256SUMS.asc` signature and per-AppImage `.asc` files.
+  Windows installers are Authenticode-signed when
+  `WINDOWS_SIGN_THUMBPRINT` is set; macOS DMGs are Developer-ID signed
+  + notarized when `MACOS_SIGN_ID` is set. A `manifest.json` describing
+  every artifact's sha256 and signature URL accompanies each release;
+  the landing page fetches this instead of scraping the GitHub API.
 
 ## Build prerequisites (contributor)
 
@@ -391,13 +444,87 @@ Flutter path on this dev machine: `D:\git\flutter\bin\flutter.bat`.
 - **Integration tests** - Dart `integration_test` hitting a real sidecar
   (via spawn) for end-to-end flows.
 - **Profile validation** - YAML lint + schema validation in CI on
-  deckhand-builds (separate repo, invoked via its own CI).
+  deckhand-profiles (separate repo, invoked via its own CI).
 - **Hardware-in-the-loop** - manual, per-release. Document protocol in
   `RELEASING.md`.
 
+## Resilience and observability
+
+These cross-cutting properties are documented in their own files
+because each is large enough to be load-bearing on its own. They are
+listed here so a contributor reading the architecture top-down can
+discover them without needing to know to search:
+
+- **Step idempotency and on-printer run state** —
+  [STEP-IDEMPOTENCY.md](STEP-IDEMPOTENCY.md). Defines the contract
+  every install step must satisfy (pre-check, resume strategy,
+  post-check) and the on-printer `~/.deckhand/run-state.json` file
+  the wizard reads to resume after a crash, dropped SSH session, or
+  power blip without re-executing already-completed steps. Pairs with
+  the host-side wizard state in
+  [`wizard_state.dart`](../packages/deckhand_core/lib/src/wizard/wizard_state.dart):
+  host file = decisions; printer file = execution.
+
+- **Profile trust model** — [PROFILE-TRUST.md](PROFILE-TRUST.md).
+  Where the bundled keyring lives, how the trust bootstraps without a
+  chicken-and-egg problem, what the user sees on every fetch, and how
+  the maintainer signing key rotates. The keyring asset is
+  [`packages/deckhand_core/lib/src/trust/keyring.asc`](../packages/deckhand_core/lib/src/trust/keyring.asc)
+  (placeholder until the production key exists); wired as a Flutter
+  asset so the binary itself is the trust root.
+
+- **Doctor self-diagnostic** — [DOCTOR.md](DOCTOR.md). The
+  preflight check exposed both as a CLI subcommand and as the
+  `doctor.run` JSON-RPC method the UI calls on every S10-welcome
+  enter. Catches "elevated helper missing", "data dir not writable",
+  "pkexec not on PATH" before the user is twenty minutes into a flow.
+
+- **Interrupted-flash detection** — see "Security model" below
+  (interrupted-flash detection). Sentinel files written before the
+  elevated helper launches and cleared only on `event: done` let
+  `disks.list` warn users about a disk left in unknown state by a
+  prior crash or power loss. Implemented in
+  [`sidecar/internal/disks/sentinel.go`](../sidecar/internal/disks/sentinel.go)
+  and
+  [`packages/deckhand_flash/lib/src/flash_sentinel.dart`](../packages/deckhand_flash/lib/src/flash_sentinel.dart).
+
+- **Egress visualization** — `SecurityService.egressEvents` (see
+  [`security_service.dart`](../packages/deckhand_core/lib/src/services/security_service.dart))
+  exposes a broadcast stream of every approved outbound HTTP request.
+  S900-progress's "Network" tab subscribes; the debug bundle's
+  `network.jsonl` captures it for support
+  ([DEBUG-BUNDLES.md](DEBUG-BUNDLES.md)). Strict allow-list
+  ([Security model](#security-model) below) gates approval; this
+  feature gives users live visibility into approvals that have
+  already been granted.
+
+- **Sidecar supervision** — [`sidecar_supervisor.dart`](../packages/deckhand_flash/lib/src/sidecar_supervisor.dart).
+  Wraps the [`SidecarClient`](../packages/deckhand_flash/lib/src/sidecar_client.dart)
+  with method classification (`retrySafe` / `stateful` /
+  `failStop`), bounded auto-restart with exponential backoff, and a
+  latch that refuses further calls after three crashes. Read-only
+  methods retry transparently; stateful methods surface a typed
+  `SidecarCrashedDuringStatefulCall` so callers can clean up partial
+  state; the destructive flash path latches the supervisor and forces
+  a relaunch.
+
+- **Debug bundles with redaction** —
+  [DEBUG-BUNDLES.md](DEBUG-BUNDLES.md). Mandatory review screen and
+  redaction pass before every "Save debug bundle" write, with a
+  stable-placeholder de-redaction story for users filing multiple
+  issues about the same printer.
+
+- **Hardware-in-the-loop CI** — [HITL.md](HITL.md). Self-hosted
+  runners with real printers attached run both wizard flows on every
+  tag and nightly against main. The headless wizard driver (pending
+  in
+  [`wizard_shell.dart`](../packages/deckhand_ui/lib/src/screens/wizard_shell.dart))
+  is the bridge between CI scenarios and the same Riverpod-wired
+  controller production users drive.
+
 ## Decided
 
-1. **License** - AGPL-3.0 for both `deckhand` and `deckhand-builds`.
+1. **License** - AGPL-3.0 for both `deckhand` and `deckhand-profiles`.
 2. **i18n** - Slang wired from day one, English-only strings at v1,
    additional locales added incrementally.
 3. **SSH library** - `dartssh2`.
@@ -405,12 +532,23 @@ Flutter path on this dev machine: `D:\git\flutter\bin\flutter.bat`.
    flash ops; sidecar stays unprivileged.
 5. **Network policy** - strict allow-list, empty by default, profile-declared
    hosts batch-approved at wizard start.
+6. **Trust root** - bundled PGP keyring shipped as a Flutter asset;
+   compromise rotation is a coordinated Deckhand + deckhand-profiles
+   release. See [PROFILE-TRUST.md](PROFILE-TRUST.md).
+7. **Idempotency** - every step declares pre-check, resume strategy,
+   post-check; the wizard reads on-printer state on resume rather
+   than re-executing blindly. See
+   [STEP-IDEMPOTENCY.md](STEP-IDEMPOTENCY.md).
+8. **Sidecar supervision policy** - read-only methods auto-retry once
+   across a sidecar restart; stateful methods don't; destructive
+   methods latch. See
+   [`sidecar_supervisor.dart`](../packages/deckhand_flash/lib/src/sidecar_supervisor.dart).
 
 ## Open decisions (non-blocking)
 
 1. **Auto-update** - Deckhand self-update vs. rely on OS package managers.
 2. **Crash reporting** - local-only log collection vs. opt-in remote.
-3. **Profile signing** - GPG-signed tags on deckhand-builds, verified on
+3. **Profile signing** - GPG-signed tags on deckhand-profiles, verified on
    fetch? Adds trust for public contributors but complicates signing flow.
 4. **Build matrix for Linux** - single `.AppImage` covering most distros
    vs. per-distro `.deb` / `.rpm` builds.

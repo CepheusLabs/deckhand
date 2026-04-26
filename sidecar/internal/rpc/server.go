@@ -14,6 +14,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -43,23 +46,87 @@ type Notifier interface {
 // Handler handles a single JSON-RPC method call.
 type Handler func(ctx context.Context, params json.RawMessage, note Notifier) (any, error)
 
+// MethodSpec describes a registered method for both runtime dispatch and
+// the IPC-docs generator. Description/Returns/Params are purely
+// informational; Handler is the dispatched function.
+//
+// An empty MethodSpec passed alongside a Name (via Register) still works
+// - Description/Returns default to empty and the method is dispatched
+// normally.
+type MethodSpec struct {
+	Name        string
+	Description string
+	Params      []ParamSpec
+	Returns     string
+	Handler     Handler
+}
+
 // Server is a JSON-RPC 2.0 server that reads requests one-per-line from
 // stdin and writes responses one-per-line to stdout.
 type Server struct {
-	mu       sync.RWMutex
-	handlers map[string]Handler
+	mu      sync.RWMutex
+	methods map[string]MethodSpec
+
+	// logger, if set via SetLogger, is called with every dispatched
+	// request (INFO) and every handler error (WARN). Handlers that
+	// need their own logger read it via Server.Logger().
+	loggerMu sync.RWMutex
+	logger   *slog.Logger
+
+	// Job registry: one cancellable context per in-flight request.
+	jobs *jobRegistry
 }
 
 // NewServer returns a Server with no handlers registered.
 func NewServer() *Server {
-	return &Server{handlers: make(map[string]Handler)}
+	return &Server{
+		methods: make(map[string]MethodSpec),
+		jobs:    newJobRegistry(),
+	}
 }
 
-// Register adds a handler for [method]. Replaces any existing handler.
+// Register adds a handler for [method]. Kept for backward compat - new
+// callers should use RegisterMethod with a full MethodSpec. Replaces any
+// existing handler.
 func (s *Server) Register(method string, h Handler) {
+	s.RegisterMethod(MethodSpec{Name: method, Handler: h})
+}
+
+// RegisterMethod adds a handler plus its documentation. Replaces any
+// existing registration for the same Name.
+func (s *Server) RegisterMethod(spec MethodSpec) {
+	if spec.Name == "" || spec.Handler == nil {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.handlers[method] = h
+	s.methods[spec.Name] = spec
+}
+
+// SetLogger installs a slog.Logger the server uses for dispatch/error
+// logging and that handlers can fetch via Logger(). Safe to call
+// concurrently with Serve but typically wired once at startup.
+func (s *Server) SetLogger(l *slog.Logger) {
+	s.loggerMu.Lock()
+	defer s.loggerMu.Unlock()
+	s.logger = l
+}
+
+// Logger returns the configured slog.Logger, or slog.Default() if none
+// was set. Never returns nil so callers don't have to nil-check.
+func (s *Server) Logger() *slog.Logger {
+	s.loggerMu.RLock()
+	defer s.loggerMu.RUnlock()
+	if s.logger != nil {
+		return s.logger
+	}
+	return slog.Default()
+}
+
+// CancelJob cancels the in-flight job with the given operation id.
+// Returns true if an entry was found and cancelled.
+func (s *Server) CancelJob(id string) bool {
+	return s.jobs.cancel(id)
 }
 
 // Serve runs the read/dispatch/respond loop until [ctx] is cancelled or
@@ -93,7 +160,7 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		}
 
 		s.mu.RLock()
-		h, ok := s.handlers[req.Method]
+		spec, ok := s.methods[req.Method]
 		s.mu.RUnlock()
 		if !ok {
 			w.writeResponse(errorResponse(req.ID, codeMethodNotFound, fmt.Sprintf("unknown method %q", req.Method), nil))
@@ -102,25 +169,43 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 
 		// Dispatch in a goroutine so long-running handlers don't block
 		// the read loop. Each request gets its own notifier that scopes
-		// notifications to its operation id.
+		// notifications to its operation id plus a cancellable context
+		// registered in the job table keyed by the same id.
 		inflight.Add(1)
-		go func(req request, h Handler) {
+		go func(req request, spec MethodSpec) {
 			defer inflight.Done()
 			opID := unquoteID(req.ID)
 			note := &methodNotifier{writer: w, operationID: opID}
+
+			// Only register the context in the job table if the request
+			// has a non-null id (JSON-RPC notifications have none, and
+			// there is no way to target them for cancellation anyway).
+			handlerCtx := ctx
+			var releaseJob func()
+			if opID != "" && opID != "null" {
+				var cancel context.CancelFunc
+				handlerCtx, cancel = context.WithCancel(ctx)
+				releaseJob = s.jobs.register(opID, cancel)
+				defer releaseJob()
+			}
+
+			s.logDispatch(req.Method, opID, req.Params)
+
 			defer func() {
 				if r := recover(); r != nil {
+					s.logHandlerError(req.Method, opID, fmt.Errorf("panic: %v", r))
 					w.writeResponse(errorResponse(req.ID, codeInternalError, fmt.Sprintf("handler panic: %v", r), nil))
 				}
 			}()
-			result, err := h(ctx, req.Params, note)
+			result, err := spec.Handler(handlerCtx, req.Params, note)
 			if err != nil {
+				s.logHandlerError(req.Method, opID, err)
 				code, data := mapError(err)
 				w.writeResponse(errorResponse(req.ID, code, err.Error(), data))
 				return
 			}
 			w.writeResponse(successResponse(req.ID, result))
-		}(req, h)
+		}(req, spec)
 	}
 	// Drain in-flight handlers before returning so the caller's output
 	// stream does not close with pending writes still queued.
@@ -129,6 +214,138 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		return err
 	}
 	return scanner.Err()
+}
+
+// RenderMethodsMarkdown returns a markdown table describing every
+// registered method, sorted by name. Used by cmd/deckhand-ipc-docs to
+// keep docs/IPC-METHODS.md current.
+func (s *Server) RenderMethodsMarkdown() string {
+	s.mu.RLock()
+	specs := make([]MethodSpec, 0, len(s.methods))
+	for _, spec := range s.methods {
+		specs = append(specs, spec)
+	}
+	s.mu.RUnlock()
+
+	sort.Slice(specs, func(i, j int) bool { return specs[i].Name < specs[j].Name })
+
+	var b strings.Builder
+	b.WriteString("# Deckhand sidecar IPC methods\n\n")
+	b.WriteString("Auto-generated from `internal/rpc` MethodSpec registrations. ")
+	b.WriteString("Do not edit by hand - regenerate with `go run ./cmd/deckhand-ipc-docs`.\n\n")
+	b.WriteString("| Method | Description | Params | Returns |\n")
+	b.WriteString("|---|---|---|---|\n")
+	for _, spec := range specs {
+		b.WriteString("| `")
+		b.WriteString(spec.Name)
+		b.WriteString("` | ")
+		b.WriteString(escapeTableCell(spec.Description))
+		b.WriteString(" | ")
+		b.WriteString(renderParams(spec.Params))
+		b.WriteString(" | ")
+		b.WriteString(escapeTableCell(spec.Returns))
+		b.WriteString(" |\n")
+	}
+	return b.String()
+}
+
+func renderParams(ps []ParamSpec) string {
+	if len(ps) == 0 {
+		return "_none_"
+	}
+	parts := make([]string, 0, len(ps))
+	for _, p := range ps {
+		tag := "optional"
+		if p.Required {
+			tag = "required"
+		}
+		kind := string(p.Kind)
+		if kind == "" {
+			kind = "any"
+		}
+		parts = append(parts, fmt.Sprintf("`%s` (%s %s)", p.Name, tag, kind))
+	}
+	return strings.Join(parts, "<br>")
+}
+
+// escapeTableCell replaces pipe and newline characters that would break
+// a markdown table row.
+func escapeTableCell(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "|", `\|`)
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
+// -------------------------------------------------------------------
+// Logging helpers
+
+// redactedKeys names JSON fields whose values are always dropped from
+// the logged params. The substring regex below catches general cases
+// like "api_password" or "auth_token"; redactedKeys catches the
+// specific fields we know about.
+var redactedKeys = map[string]struct{}{
+	"confirmation_token": {},
+	"trusted_keys":       {},
+}
+
+// redactParams returns a copy of raw with secret-ish fields elided.
+// Non-object params are passed through unchanged because everything we
+// want to redact lives at the top level of an object.
+func redactParams(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" {
+		return raw
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	changed := false
+	for k := range m {
+		if shouldRedactKey(k) {
+			m[k] = json.RawMessage(`"[redacted]"`)
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+func shouldRedactKey(k string) bool {
+	if _, ok := redactedKeys[k]; ok {
+		return true
+	}
+	lk := strings.ToLower(k)
+	return strings.Contains(lk, "password") ||
+		strings.Contains(lk, "secret") ||
+		strings.Contains(lk, "token")
+}
+
+func (s *Server) logDispatch(method, opID string, raw json.RawMessage) {
+	l := s.Logger()
+	l.Info("rpc.dispatch",
+		"method", method,
+		"operation_id", opID,
+		"params", string(redactParams(raw)),
+	)
+}
+
+func (s *Server) logHandlerError(method, opID string, err error) {
+	l := s.Logger()
+	l.Warn("rpc.handler_error",
+		"method", method,
+		"operation_id", opID,
+		"error", err.Error(),
+	)
 }
 
 // -------------------------------------------------------------------

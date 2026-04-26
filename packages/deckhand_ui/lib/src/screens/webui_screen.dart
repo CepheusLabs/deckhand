@@ -123,13 +123,14 @@ class _WebuiScreenState extends ConsumerState<WebuiScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/firmware'),
+          isBack: true,
         ),
       ],
     );
   }
 
   /// Prefer a profile-supplied `description`. If absent, fall back to a
-  /// terse "<display_name> - port <n>" line so at least the reader knows
+  /// terse `<display_name> - port <n>` line so at least the reader knows
   /// which service we're installing. Per-id prose belongs in the
   /// profile YAML, not in this widget.
   String _userFacingBlurb(Map raw) {

@@ -39,9 +39,9 @@ void main() {
         'screens': [
           {'id': 'arco_screen', 'recommended': true},
         ],
-        'addons': [],
+        'addons': <Map<String, Object?>>[],
         'flows': {
-          'stock_keep': {'enabled': true, 'steps': []},
+          'stock_keep': {'enabled': true, 'steps': <Map<String, Object?>>[]},
         },
       };
 

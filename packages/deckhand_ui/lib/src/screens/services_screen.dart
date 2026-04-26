@@ -162,6 +162,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/screen-choice'),
+          isBack: true,
         ),
       ],
     );

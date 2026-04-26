@@ -62,7 +62,7 @@ void main() {
       // write so a mid-test crash still cleans up.
       addTearDown(() async {
         await _ssh(host, password,
-            'sudo -S rm -f $target $backup ${backup}.meta.json');
+            'sudo -S rm -f $target $backup $backup.meta.json');
       });
 
       // Seed the file with non-trivial content via a /tmp stage +

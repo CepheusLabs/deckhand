@@ -809,8 +809,8 @@ class TranslationsSettingsEn {
 	/// en: 'Local profiles directory'
 	String get profiles_local_dir_label => 'Local profiles directory';
 
-	/// en: 'Point Deckhand at a checked-out copy of deckhand-builds on this machine instead of fetching main from GitHub. Useful for profile authoring. Leave empty to fetch from GitHub. '
-	String get profiles_local_dir_hint => 'Point Deckhand at a checked-out copy of deckhand-builds on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n';
+	/// en: 'Point Deckhand at a checked-out copy of deckhand-profiles on this machine instead of fetching main from GitHub. Useful for profile authoring. Leave empty to fetch from GitHub. '
+	String get profiles_local_dir_hint => 'Point Deckhand at a checked-out copy of deckhand-profiles on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n';
 
 	/// en: 'Using local dir'
 	String get profiles_local_dir_active => 'Using local dir';
@@ -1241,7 +1241,7 @@ extension on Translations {
 			'settings.title' => 'Settings',
 			'settings.section_profiles' => 'Printer profiles',
 			'settings.profiles_local_dir_label' => 'Local profiles directory',
-			'settings.profiles_local_dir_hint' => 'Point Deckhand at a checked-out copy of deckhand-builds on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n',
+			'settings.profiles_local_dir_hint' => 'Point Deckhand at a checked-out copy of deckhand-profiles on this\nmachine instead of fetching main from GitHub. Useful for profile\nauthoring. Leave empty to fetch from GitHub.\n',
 			'settings.profiles_local_dir_active' => 'Using local dir',
 			'settings.profiles_local_dir_github' => 'Fetching from GitHub',
 			'settings.profiles_local_dir_pick' => 'Pick folder...',

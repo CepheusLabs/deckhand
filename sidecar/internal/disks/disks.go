@@ -12,6 +12,11 @@ type DiskInfo struct {
 	Model      string      `json:"model"`
 	Removable  bool        `json:"removable"`
 	Partitions []Partition `json:"partitions"`
+	// InterruptedFlash is set when a sentinel left over from a prior,
+	// unfinished flash matches this disk. The UI surfaces it so users
+	// can recognise a power-loss / crash mid-write before they reuse
+	// the device. Nil means "no record of an interrupted flash."
+	InterruptedFlash *InterruptedFlash `json:"interrupted_flash,omitempty"`
 }
 
 // Partition is one partition on a DiskInfo.

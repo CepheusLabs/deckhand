@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a capability Deckhand doesn't have yet.
+title: "[feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the user problem?
+      description: >
+        Describe what you're trying to do and where Deckhand falls
+        short today. "I want Deckhand to do X" is less useful than
+        "I have a Y printer and today Deckhand makes me manually Z,
+        which breaks when W happens."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Sketched solution
+      description: >
+        Optional. If you have a specific UX or technical approach
+        in mind, describe it. Happy to throw it out if we find a
+        better path.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >
+        Existing tooling you tried, workarounds you rejected, and why.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is about Deckhand itself, not a specific printer profile.
+          required: true
+        - label: This is NOT a security issue.
+          required: true

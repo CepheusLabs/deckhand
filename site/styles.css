@@ -100,8 +100,15 @@ code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: .9e
   color: var(--text); transition: border-color 150ms;
 }
 .download-card:hover { border-color: var(--accent); text-decoration: none; }
+.download-card.is-detected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(122, 162, 255, 0.2); }
 .download-card .dl-os { font-weight: 600; font-size: 16px; }
-.download-card .dl-file { color: var(--text-muted); font-size: 13px; font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+.download-card .dl-file { color: var(--text-muted); font-size: 13px; font-family: "SFMono-Regular", Menlo, Consolas, monospace; word-break: break-all; }
+.download-card .dl-meta { color: var(--text-muted); font-size: 12px; }
+.download-card .dl-sha { color: var(--text-muted); font-size: 12px; font-family: "SFMono-Regular", Menlo, Consolas, monospace; cursor: help; }
+.download-card .dl-verify { color: var(--accent); font-size: 12px; align-self: flex-start; }
+.download-card .dl-verify:hover { text-decoration: underline; }
+.verify-note { color: var(--text-muted); font-size: 13px; margin: 8px 0 16px; }
+.verify-note:empty { display: none; }
 .build-hint { color: var(--text-muted); font-size: 14px; }
 
 /* ---------------------------------------------------------- Docs grid */

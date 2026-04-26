@@ -1,0 +1,55 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.22"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+
+  settings:
+    gosec:
+      excludes:
+        # G204: Subprocess launched with variable. All exec.Command
+        # callers pass allowlisted binary paths (sidecar binary,
+        # elevated helper, osascript / pkexec / powershell). The
+        # call sites are the audit boundary, not the linter.
+        - G204
+        # G304: File path provided as taint input. Sidecar paths are
+        # validated by validateHashPath / validateRepoURL in main.go;
+        # flagging every os.Open / os.Stat would be pure noise.
+        - G304
+    revive:
+      confidence: 0.8
+      rules:
+        - name: exported
+        - name: error-return
+        - name: error-naming
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: unused-parameter
+          disabled: true
+
+  exclusions:
+    rules:
+      # Tests use t.TempDir() aggressively; we don't need errcheck on
+      # the cleanup defers and nothing in a test is a security risk.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt

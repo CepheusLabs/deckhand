@@ -107,6 +107,7 @@ class _HardeningScreenState extends ConsumerState<HardeningScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/files'),
+          isBack: true,
         ),
       ],
     );

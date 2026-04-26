@@ -17,26 +17,35 @@ import 'package:yaml/yaml.dart';
 /// `DECKHAND_PROFILES_LOCAL` is set (or [localProfilesDir] is passed
 /// directly), the service reads `registry.yaml` and `printers/<id>/` from
 /// that directory and skips all network fetches. Intended for profile
-/// authoring and local testing before a deckhand-builds release is cut.
+/// authoring and local testing before a deckhand-profiles release is cut.
 class SidecarProfileService implements ProfileService {
   SidecarProfileService({
     required this.sidecar,
     required this.paths,
+    required SecurityService security,
     this.registryUrl =
-        'https://raw.githubusercontent.com/CepheusLabs/deckhand-builds/main/registry.yaml',
-    this.profilesRepo = 'https://github.com/CepheusLabs/deckhand-builds.git',
+        'https://raw.githubusercontent.com/CepheusLabs/deckhand-profiles/main/registry.yaml',
+    this.profilesRepo = 'https://github.com/CepheusLabs/deckhand-profiles.git',
     String? localProfilesDir,
     Dio? dio,
-  }) : _dio = dio ?? Dio(),
-       localProfilesDir =
-           localProfilesDir ?? Platform.environment['DECKHAND_PROFILES_LOCAL'];
+    TrustKeyring? trustKeyring,
+    bool requireSignedTag = false,
+  })  : _security = security,
+        _dio = (dio ?? Dio())..interceptors.add(EgressLogInterceptor(security)),
+        _trustKeyring = trustKeyring,
+        _requireSignedTag = requireSignedTag,
+        localProfilesDir =
+            localProfilesDir ?? Platform.environment['DECKHAND_PROFILES_LOCAL'];
 
-  final SidecarClient sidecar;
+  final SidecarConnection sidecar;
   final DeckhandPaths paths;
   final String registryUrl;
   final String profilesRepo;
   final String? localProfilesDir;
+  final SecurityService _security;
   final Dio _dio;
+  final TrustKeyring? _trustKeyring;
+  final bool _requireSignedTag;
 
   @override
   Future<ProfileRegistry> fetchRegistry({bool force = false}) async {
@@ -52,6 +61,7 @@ class SidecarProfileService implements ProfileService {
       }
       yamlText = await f.readAsString();
     } else {
+      await requireHostApproved(_security, registryUrl);
       final res = await _dio.get<String>(
         registryUrl,
         options: Options(responseType: ResponseType.plain),
@@ -124,11 +134,24 @@ class SidecarProfileService implements ProfileService {
       }
     }
 
-    final res = await sidecar.call('profiles.fetch', {
+    await requireHostApproved(_security, profilesRepo);
+    final params = <String, dynamic>{
       'repo_url': profilesRepo,
       'ref': resolvedRef,
       'dest': dest,
-    });
+    };
+    final keyring = _trustKeyring;
+    if (keyring != null && !keyring.isPlaceholder) {
+      // Production wiring path: the bundled keyring is real, so we
+      // forward it on every fetch. The sidecar verifies signed tags
+      // against this material and surfaces unsigned_or_untrusted as
+      // a typed error the UI hard-stops on.
+      params['trusted_keys'] = keyring.armored;
+      if (_requireSignedTag) {
+        params['require_signed_tag'] = true;
+      }
+    }
+    final res = await sidecar.call('profiles.fetch', params);
     return ProfileCacheEntry(
       profileId: profileId,
       ref: resolvedRef,
@@ -147,10 +170,54 @@ class SidecarProfileService implements ProfileService {
   Future<PrinterProfile> load(ProfileCacheEntry cacheEntry) async {
     final file = File(p.join(cacheEntry.localPath, 'profile.yaml'));
     final text = await file.readAsString();
-    final yaml = loadYaml(text);
-    final raw = _deepConvert(yaml) as Map<String, dynamic>;
-    return PrinterProfile.fromJson(raw);
+    return parseProfileYaml(text);
   }
+}
+
+/// Thrown when a profile.yaml is missing the fields the wizard treats
+/// as load-bearing. Surfaces a readable message instead of the raw
+/// cast/null error a downstream model would otherwise emit.
+class ProfileFormatException implements Exception {
+  const ProfileFormatException(this.message);
+  final String message;
+  @override
+  String toString() => 'ProfileFormatException: $message';
+}
+
+/// Parse a profile.yaml string into a [PrinterProfile].
+///
+/// Separated from [SidecarProfileService.load] so unit tests can
+/// exercise the parsing contract without going through File I/O.
+///
+/// Contract:
+///   - A profile missing `schema_version` OR `profile_id` throws a
+///     [ProfileFormatException] with a message that names the missing
+///     field. This lets the wizard refuse to proceed on half-migrated
+///     profiles instead of bricking a printer with an empty id.
+///   - Unknown keys are preserved in [PrinterProfile.raw] (forward
+///     compatibility with future profile versions).
+///   - `status: stub` parses as [ProfileStatus.stub] so the wizard can
+///     refuse to run it.
+PrinterProfile parseProfileYaml(String yamlText) {
+  final yaml = loadYaml(yamlText);
+  if (yaml is! YamlMap) {
+    throw const ProfileFormatException(
+      'profile.yaml root must be a mapping',
+    );
+  }
+  final raw = _deepConvert(yaml) as Map<String, dynamic>;
+  if (!raw.containsKey('schema_version')) {
+    throw const ProfileFormatException(
+      'profile.yaml is missing required field `schema_version`',
+    );
+  }
+  final pid = raw['profile_id'];
+  if (pid is! String || pid.isEmpty) {
+    throw const ProfileFormatException(
+      'profile.yaml is missing required field `profile_id`',
+    );
+  }
+  return PrinterProfile.fromJson(raw);
 }
 
 // yaml's YamlMap/YamlList aren't directly serializable; convert into

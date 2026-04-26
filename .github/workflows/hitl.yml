@@ -1,0 +1,206 @@
+name: HITL
+
+# Hardware-in-the-loop tests — run the wizard end-to-end against
+# real printers. See docs/HITL.md for the rig setup, scenarios, and
+# headless driver.
+#
+# Triggers:
+#   - push of a v* tag → full matrix on every rig, gates the release
+#   - daily cron → same matrix against main; failure opens a tracking
+#     issue rather than blocking a release
+#   - manual dispatch → run a single rig + flow, used to repro a bug
+#
+# Self-hosted runners required: each rig is a runner with the labels
+# `self-hosted, hitl, <os>` (linux / macos / windows). Without those
+# runners registered, jobs queue and time out by design — there is no
+# fallback to GitHub-hosted runners because real hardware is the whole
+# point.
+
+on:
+  push:
+    tags: ['v*']
+  schedule:
+    # 06:00 UTC. Picks a quiet hour in every timezone so the rigs
+    # aren't competing with maintainers manually probing them.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      rig:
+        description: 'Single rig to run against (linux/macos/windows). Empty = all.'
+        required: false
+        default: ''
+        type: string
+      scenario:
+        description: 'Scenario file under packaging/hitl/scenarios/. Empty = all flows for the rig.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  issues: write  # for the nightly-broken issue opener
+
+concurrency:
+  # Two HITL runs against the same rig at the same time would
+  # collide on the printer. Coalesce per rig + flow combo.
+  group: hitl-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    # ---------------------------------------------------------------
+    # One job per (rig, flow). Sequential within a rig (printer can
+    # only do one install at a time); parallel across rigs.
+    # ---------------------------------------------------------------
+    name: ${{ matrix.rig }} / ${{ matrix.flow }}
+    # Pin to a specific physical printer via an extra label. Org-
+    # level runners shared across repos can match on `[self-hosted,
+    # hitl, <os>]` alone — but two repos picking the same printer
+    # at the same time would cause a flash collision. The
+    # `hitl-printer-<id>` label namespaces the rig + printer pair so
+    # an external repo's HITL job queues behind ours instead of
+    # double-flashing. Drop the printer label if a rig has more than
+    # one printer attached and you want either to pick up the job.
+    runs-on:
+      - self-hosted
+      - hitl
+      - ${{ matrix.rig }}
+      - hitl-printer-sovol01
+    strategy:
+      # Keep going across rigs even if one fails — partial coverage
+      # beats none. Within a single (rig, flow) the job is atomic.
+      fail-fast: false
+      matrix:
+        rig: [linux, macos, windows]
+        flow: [stock-keep, fresh-flash, sentinel-test, snapshot-test]
+        # Manual dispatch can narrow the matrix.
+        exclude: []
+    # Cross-repo concurrency guard: any other workflow (this repo or
+    # another in the same org) targeting the same printer queues
+    # behind us instead of racing. The group key uses the printer
+    # label, not the repo, so the lock is global across the runner.
+    concurrency:
+      group: hitl-printer-sovol01-${{ matrix.rig }}-${{ matrix.flow }}
+      cancel-in-progress: false
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve scenario file
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Default scenario is packaging/hitl/scenarios/<rig>/<flow>.yaml.
+          # Manual dispatch can override.
+          if [ -n "${{ github.event.inputs.scenario }}" ]; then
+            scenario="${{ github.event.inputs.scenario }}"
+          else
+            scenario="packaging/hitl/scenarios/${{ matrix.rig }}/${{ matrix.flow }}.yaml"
+          fi
+          if [ ! -f "$scenario" ]; then
+            echo "::warning::scenario $scenario does not exist yet — skipping"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "scenario=$scenario" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if scenario is missing
+        if: steps.resolve.outputs.skip == '1'
+        run: |
+          echo "::notice::no scenario for ${{ matrix.rig }}/${{ matrix.flow }}; skipping"
+          exit 0
+
+      # Pre-flight the rig itself before starting the install. If the
+      # PDU/eMMC mux is in an unknown state from a prior run, reset
+      # both before the printer is asked to do anything. Linux/macOS
+      # rigs use the bash script; Windows rigs use the PowerShell
+      # companion (same contract, see packaging/hitl/scripts/).
+      - name: Reset rig (Linux/macOS)
+        if: steps.resolve.outputs.skip != '1' && matrix.rig != 'windows'
+        run: ./packaging/hitl/scripts/reset-rig.sh
+
+      - name: Reset rig (Windows)
+        if: steps.resolve.outputs.skip != '1' && matrix.rig == 'windows'
+        shell: pwsh
+        run: ./packaging/hitl/scripts/reset-rig.ps1
+
+      - name: Build sidecar + helper for the rig
+        if: steps.resolve.outputs.skip != '1'
+        working-directory: sidecar
+        run: |
+          go build -o ../packaging/hitl/bin/deckhand-sidecar ./cmd/deckhand-sidecar
+          go build -o ../packaging/hitl/bin/deckhand-elevated-helper ./cmd/deckhand-elevated-helper
+
+      - name: Set up Flutter
+        if: steps.resolve.outputs.skip != '1'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.9'
+
+      - name: Resolve driver deps
+        if: steps.resolve.outputs.skip != '1'
+        working-directory: packages/deckhand_hitl
+        run: flutter pub get
+
+      - name: Run scenario
+        if: steps.resolve.outputs.skip != '1'
+        working-directory: packages/deckhand_hitl
+        env:
+          # Per-rig printer credentials are configured as secrets on
+          # the runner host. The scenario YAML names them; the driver
+          # reads them via the env-mapping declared in scenario.ssh.
+          PRINTER_PASS: ${{ secrets.HITL_PRINTER_PASS }}
+        run: |
+          # `dart run` instead of `dart compile exe`: the driver
+          # transitively depends on Flutter packages
+          # (deckhand_flash, etc.), and AOT compilation would try to
+          # compile dart:ui types it never instantiates. Running via
+          # the Dart VM works fine — Flutter SDK is on the runner
+          # anyway. See docs/HITL.md for the rationale.
+          # Compute the deckhand version once so the same string
+          # appears in run-state files, manifests, and the release
+          # artifacts a maintainer correlates against.
+          DH_VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$DH_VERSION" ] || [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            DH_VERSION="hitl-$(git rev-parse --short HEAD)"
+          fi
+          dart run --define=DECKHAND_VERSION="$DH_VERSION" bin/deckhand-hitl.dart \
+            --scenario ../../${{ steps.resolve.outputs.scenario }} \
+            --sidecar-path ../../packaging/hitl/bin/deckhand-sidecar \
+            --helper-path ../../packaging/hitl/bin/deckhand-elevated-helper \
+            --output-dir ../../hitl-artifacts \
+            --bail-on-first-failure
+
+      # Always upload artifacts — even when the scenario succeeded,
+      # the timing data is useful for spotting drift (a 14-min flow
+      # quietly turning into 28 min between releases).
+      - name: Upload artifacts
+        if: always() && steps.resolve.outputs.skip != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-${{ matrix.rig }}-${{ matrix.flow }}
+          path: hitl-artifacts/
+          retention-days: 14
+
+  # ---------------------------------------------------------------
+  # Nightly notifier — opens (or de-dups) a "HITL nightly broken"
+  # issue when any matrix job failed. Skipped on tag-push so a
+  # release-day failure goes through the normal release-blocked
+  # signal instead of an issue.
+  # ---------------------------------------------------------------
+  notify-nightly:
+    name: Notify on nightly failure
+    needs: matrix
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Open or update tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./packaging/hitl/scripts/open-broken-issue.sh \
+            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

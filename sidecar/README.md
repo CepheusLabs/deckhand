@@ -8,7 +8,7 @@ Only operations Dart can't do portably:
 
 - `disks.list` / `disks.read_image` / `disks.write_image` / `disks.hash`
 - `os.download` — HTTP fetch with progress + sha256 verify
-- `profiles.fetch` — `go-git` shallow clone of the deckhand-builds repo
+- `profiles.fetch` — `go-git` shallow clone of the deckhand-profiles repo
 - `host.info` — OS / arch / data dirs
 - Lifecycle: `ping`, `version.compat`, `shutdown`
 

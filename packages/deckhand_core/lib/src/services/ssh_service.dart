@@ -42,6 +42,16 @@ abstract class SshService {
 
   Future<int> download(SshSession session, String remotePath, String localPath);
 
+  /// Run `du -sk` against each path and return its size in bytes.
+  /// Missing paths return 0 rather than erroring — the snapshot
+  /// screen shows a list of probable directories and lets the user
+  /// pick which exist; "doesn't exist" is just "0 bytes."
+  ///
+  /// Single round-trip: paths are joined into one shell invocation
+  /// guarded by `&&` so an SSH timeout reflects total wall time, not
+  /// N-times-per-path.
+  Future<Map<String, int>> duPaths(SshSession session, List<String> paths);
+
   Future<void> disconnect(SshSession session);
 }
 

@@ -126,7 +126,7 @@ class _ScreenChoiceScreenState extends ConsumerState<ScreenChoiceScreen> {
               },
       ),
       secondaryActions: [
-        WizardAction(label: t.common.action_back, onPressed: () => context.go('/kiauh')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/kiauh'), isBack: true),
       ],
     );
   }

@@ -103,6 +103,7 @@ class _FirmwareScreenState extends ConsumerState<FirmwareScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/choose-path'),
+          isBack: true,
         ),
       ],
     );

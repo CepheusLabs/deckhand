@@ -80,6 +80,21 @@ Ask the sidecar to exit cleanly.
 - **Params**: none
 - **Result**: `{ ok: true }` (sidecar exits immediately after responding)
 
+#### `doctor.run`
+Run the sidecar self-diagnostic and return structured results.
+See [DOCTOR.md](DOCTOR.md) for the check catalog and where the
+results surface in the wizard.
+- **Params**: none
+- **Result**:
+  ```json
+  { "passed": true,
+    "results": [{"name":"...","status":"PASS|WARN|FAIL","detail":"..."}],
+    "report": "[PASS] runtime — …\n[PASS] elevated_helper — …\n…" }
+  ```
+- The `report` string is verbatim CLI output so a user copy-pasting
+  from the UI's "View report" expander gets identical text to running
+  `deckhand-sidecar doctor` directly.
+
 ---
 
 ### Disks
@@ -96,8 +111,21 @@ Enumerate local disks.
     "bus":"USB",
     "model":"Generic STORAGE DEVICE",
     "removable": true,
-    "partitions":[{"index":1,"filesystem":"...","size_bytes":..,"mountpoint":"F:\\"}] }
+    "partitions":[{"index":1,"filesystem":"...","size_bytes":..,"mountpoint":"F:\\"}],
+    "interrupted_flash": {
+      "started_at":"2026-04-25T12:14:08Z",
+      "image_path":"/Users/me/Library/Caches/Deckhand/os-images/sovol_zero.img",
+      "image_sha256":"..."
+    } }
   ```
+  - **`interrupted_flash`** (optional). Present when a sentinel file
+    in `<data_dir>/Deckhand/state/flash-sentinels/` matches this
+    disk and is younger than 7 days. The UI uses this to warn the
+    user that a previous flash was interrupted (helper crash, power
+    loss, user abort) — the disk's contents are unknown and should
+    be wiped before reuse. The UI clears the sentinel by either
+    completing a fresh flash to the same disk or invoking the
+    manage view's "discard interrupted flash" action.
 
 #### `disks.hash`
 SHA-256 of a local file.
@@ -113,12 +141,23 @@ dd a disk into a file (for backups). Emits `progress` notifications.
   usually means running elevated; on Linux the user must be in the disk
   group or root.
 
+#### `disks.safety_check`
+Preflight a candidate flash target. Returns a structured verdict the UI
+must honor before sending `disks.write_image`. Oversized disks, disks
+mounted at system paths, and Windows non-removable disks are rejected;
+sizes in the 128–512 GiB band come back with a warning the UI must
+explicitly surface.
+- **Params**: `{ disk: <full DiskInfo object from disks.list> }`
+- **Result**: `{ disk_id, allowed: bool, blocking_reasons: [str], warnings: [str] }`
+
 #### `disks.write_image`
 Write an image to a disk. In the main sidecar this **always returns an
 error** - the UI must dispatch via the elevated helper binary
 (`deckhand-elevated-helper`) which performs the actual write.
-- **Params**: `{ image_path: str, disk_id: str, confirmation_token: str }`
-- **Result**: - (always errors with "elevation required")
+- **Params**: `{ image_path: str, disk_id: str, confirmation_token: str, disk?: DiskInfo }`
+- **Result**: - (errors with `reason: "elevation_required"` when safe,
+  or `reason: "unsafe_target"` + `verdict` when the optional `disk`
+  param fails the safety check).
 
 ---
 
@@ -135,15 +174,31 @@ HTTP GET a large file with progress + optional sha256 verification.
 ### Profiles
 
 #### `profiles.fetch`
-Shallow-clone (`depth=1`) a profile repo at a ref via go-git.
-- **Params**: `{ repo_url: str, ref: str, dest: str, force?: bool }`
+Shallow-clone (`depth=1`) a profile repo at a ref via go-git. Supports
+signed-tag verification when `trusted_keys` is supplied; only annotated
+tags can be verified.
+- **Params**:
+  ```json
+  { "repo_url": "...",
+    "ref": "v1.2.3",
+    "dest": "...",
+    "force": false,
+    "trusted_keys": "<armored PGP keyring, optional>",
+    "require_signed_tag": false }
+  ```
 - **Result**:
   ```json
-  { "local_path":"...",
-    "resolved_sha":"...",
-    "resolved_ref":"...",
-    "was_cached": bool }
+  { "local_path": "...",
+    "resolved_sha": "...",
+    "resolved_ref": "...",
+    "resolved_kind": "branch"|"tag",
+    "was_cached": false,
+    "verified": true,
+    "verified_by": "<signer fingerprint>" }
   ```
+- **Error code -35001** (`reason: "unsigned_or_untrusted"`) when
+  `require_signed_tag` is true and the resolved ref is a branch or the
+  tag's signature does not verify against the trusted keyring.
 
 ---
 
@@ -174,6 +229,31 @@ Line-delimited JSON on stdout:
 ```
 
 On failure: `{"event":"error","message":"..."}` then exit non-zero.
+
+## Sidecar lifecycle and crash recovery
+
+A sidecar process exit between request and response surfaces as a
+JSON-RPC error with code `-1` and message containing `sidecar process
+exited`. The UI's
+[`SidecarSupervisor`](../packages/deckhand_flash/lib/src/sidecar_supervisor.dart)
+catches these specifically and applies a per-method policy:
+
+| Method class | Methods | Policy on sidecar exit mid-call |
+|--------------|---------|--------------------------------|
+| `retrySafe` | `ping`, `version.compat`, `host.info`, `doctor.run`, `disks.list`, `disks.hash`, `disks.safety_check`, `jobs.cancel` | Re-spawn sidecar, replay the call once. Failure here propagates the original error. |
+| `stateful` | `os.download`, `profiles.fetch`, `disks.read_image` | Re-spawn sidecar, throw `SidecarCrashedDuringStatefulCall`. Caller is expected to clean up partial state (delete the half-downloaded file, `rm -rf` the partial clone) before retrying. |
+| `failStop` | `disks.write_image` | Latch the supervisor and surface a hard-stop screen. The user must relaunch Deckhand. |
+
+Restart policy is two automatic restarts per session with backoff
+(1s, 4s). After the third crash the supervisor latches and every
+subsequent call fails immediately with `SidecarLatchedException`.
+The cap exists to avoid pinning the CPU on a sidecar that segfaults
+on startup — a healthy session never hits it.
+
+Notification streams (the broadcast `notifications` stream and any
+`callStreaming` operation streams) close on process exit. Long-lived
+listeners (e.g. egress visualization) re-subscribe to the new
+sidecar's stream automatically once a restart succeeds.
 
 ## Framing implementation notes
 

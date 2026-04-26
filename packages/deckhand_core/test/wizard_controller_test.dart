@@ -1406,17 +1406,24 @@ class FakeSsh implements SshService {
   /// that don't care about per-call granularity.
   String? lastSudoPassword;
 
-  /// Run calls with the background state-probe filtered out. The probe
-  /// fires automatically on connect and muddies per-test assertions;
-  /// every test cares about the FOREGROUND commands its step
-  /// generated, not the probe's multi-line shell script.
-  List<String> get steps =>
-      runCalls.where((c) => !c.startsWith('#!/bin/sh')).toList();
+  /// Run calls with bookkeeping commands filtered out. Tests care
+  /// about install-step commands; the printer-state probe (a multi-
+  /// line `#!/bin/sh` script that fires on every connect) and the
+  /// run-state write/read commands (which target
+  /// `~/.deckhand/run-state.json` per [docs/STEP-IDEMPOTENCY.md])
+  /// are bookkeeping. The full set is still in [runCalls] for the
+  /// few tests that explicitly assert on it.
+  List<String> get steps => runCalls.where(_isInstallStep).toList();
 
   /// Same filter, but returns full run details (command + sudoPw).
-  List<FakeSshRunCall> get stepDetails => runDetails
-      .where((d) => !d.command.startsWith('#!/bin/sh'))
-      .toList();
+  List<FakeSshRunCall> get stepDetails =>
+      runDetails.where((d) => _isInstallStep(d.command)).toList();
+
+  static bool _isInstallStep(String cmd) {
+    if (cmd.startsWith('#!/bin/sh')) return false;
+    if (cmd.contains('.deckhand/run-state.json')) return false;
+    return true;
+  }
 
   @override
   Future<SshSession> connect({
@@ -1478,6 +1485,9 @@ class FakeSsh implements SshService {
     String remotePath,
     String localPath,
   ) async => 0;
+  @override
+  Future<Map<String, int>> duPaths(SshSession session, List<String> paths) async =>
+      {for (final p in paths) p: 0};
   @override
   Future<void> disconnect(SshSession session) async {}
 }
@@ -1584,6 +1594,12 @@ class FakeSecurity implements SecurityService {
   @override
   Future<bool> isHostAllowed(String host) async => true;
   @override
+  Future<void> approveHost(String host) async {}
+
+  @override
+  Future<void> revokeHost(String host) async {}
+
+  @override
   Future<void> pinHostFingerprint({
     required String host,
     required String fingerprint,
@@ -1594,6 +1610,10 @@ class FakeSecurity implements SecurityService {
   Future<Map<String, bool>> requestHostApprovals(List<String> hosts) async => {
     for (final h in hosts) h: true,
   };
+  @override
+  Stream<EgressEvent> get egressEvents => const Stream.empty();
+  @override
+  void recordEgress(EgressEvent event) {}
 }
 
 // -----------------------------------------------------------------

@@ -321,7 +321,7 @@ void main() {
 
 // -----------------------------------------------------------------
 
-final _fakeSession = SshSession(
+const _fakeSession = SshSession(
   id: 'test',
   host: '127.0.0.1',
   port: 22,
@@ -378,6 +378,9 @@ class _StubSsh implements SshService {
     String remotePath,
     String localPath,
   ) async => 0;
+  @override
+  Future<Map<String, int>> duPaths(SshSession session, List<String> paths) async =>
+      {for (final p in paths) p: 0};
   @override
   Future<void> disconnect(SshSession session) async {}
 }

@@ -1,4 +1,36 @@
-# All PRs are routed to @CepheusLabs for review.
-# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/managing-repository-settings/about-code-owners
+# Code-owners for review routing. See
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/managing-repository-settings/about-code-owners
+#
+# `@CepheusLabs/<team>` references kick in once each named team is
+# created on github.com/CepheusLabs (team names below are intentionally
+# stable so adding/removing humans is a zero-diff change here). When
+# a team doesn't yet exist GitHub silently ignores the entry and the
+# global default at the top wins, so this file is safe to land
+# before the teams do.
 
-*       @CepheusLabs
+# Default owner.
+* @CepheusLabs
+
+# Privileged surfaces — anything that can corrupt a disk, escape
+# the sandbox, or fetch profile-supplied code. Two-team review.
+/sidecar/internal/disks/                @CepheusLabs @CepheusLabs/security
+/sidecar/cmd/deckhand-elevated-helper/  @CepheusLabs @CepheusLabs/security
+/packages/deckhand_flash/               @CepheusLabs @CepheusLabs/security
+/packages/deckhand_profile_script/      @CepheusLabs @CepheusLabs/security
+/packages/deckhand_profile_lint/        @CepheusLabs @CepheusLabs/security
+/SECURITY.md                            @CepheusLabs @CepheusLabs/security
+
+# Release pipeline — packaging, signing, SBOM, manifest.
+/packaging/                             @CepheusLabs @CepheusLabs/release
+/.github/workflows/release.yml          @CepheusLabs @CepheusLabs/release
+/.github/workflows/security.yml         @CepheusLabs @CepheusLabs/security
+/scripts/build_manifest.py              @CepheusLabs @CepheusLabs/release
+/scripts/test_build_manifest.py         @CepheusLabs @CepheusLabs/release
+
+# Architecture + IPC wire-protocol contract.
+/docs/ARCHITECTURE.md                   @CepheusLabs @CepheusLabs/architects
+/docs/IPC.md                            @CepheusLabs @CepheusLabs/architects
+/docs/RELEASING.md                      @CepheusLabs @CepheusLabs/architects
+/docs/IPC-METHODS.md                    @CepheusLabs @CepheusLabs/architects
+/sidecar/internal/rpc/                  @CepheusLabs @CepheusLabs/architects @CepheusLabs/security
+/sidecar/internal/handlers/             @CepheusLabs @CepheusLabs/architects @CepheusLabs/security

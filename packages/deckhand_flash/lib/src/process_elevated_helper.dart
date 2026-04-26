@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:deckhand_core/deckhand_core.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
+
+import 'flash_sentinel.dart';
 
 /// [ElevatedHelperService] that launches the sibling
 /// `deckhand-elevated-helper` binary with platform-native elevation.
@@ -22,10 +25,20 @@ import 'package:path/path.dart' as p;
 ///   - Linux: `pkexec` - the helper inherits stdio directly so
 ///     progress streams live on stdout.
 class ProcessElevatedHelperService implements ElevatedHelperService {
-  ProcessElevatedHelperService({required this.helperPath});
+  ProcessElevatedHelperService({
+    required this.helperPath,
+    this.sentinelWriter,
+  });
 
   /// Absolute path to the `deckhand-elevated-helper` binary.
   final String helperPath;
+
+  /// When non-null, [writeImage] persists a flash-sentinel before
+  /// launching the helper and clears it only after observing the
+  /// helper's `event: done`. Production wiring constructs this with
+  /// the per-user `<data_dir>/Deckhand/state/flash-sentinels/`
+  /// directory; tests that don't care about sentinels leave it null.
+  final FlashSentinelWriter? sentinelWriter;
 
   @override
   Stream<FlashProgress> writeImage({
@@ -44,18 +57,66 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
       if (expectedSha256 != null) ...['--sha256', expectedSha256],
     ];
 
-    if (Platform.isWindows) {
-      yield* _runWindows(args);
-    } else if (Platform.isMacOS) {
-      yield* _runMacOs(args);
-    } else {
-      yield* _runLinux(args);
+    // Sentinel goes down before the elevation prompt fires. Anything
+    // that interrupts the operation between here and `event: done`
+    // — helper crash, UAC denial, user closing the app, power loss
+    // — leaves the sentinel in place for the next disks.list to find.
+    if (sentinelWriter != null) {
+      try {
+        await sentinelWriter!.write(
+          diskId: diskId,
+          imagePath: imagePath,
+          imageSha256: expectedSha256,
+        );
+      } on FileSystemException {
+        // A non-writable sentinel directory must not block the flash:
+        // sentinels are diagnostic, not load-bearing for safety. The
+        // user already cleared the destructive-op confirmation
+        // dialog; refusing to flash here would be punitive.
+      }
     }
+
+    var sawDone = false;
+    try {
+      await for (final ev in launchHelper(args)) {
+        if (ev.phase == FlashPhase.done) sawDone = true;
+        yield ev;
+      }
+    } finally {
+      if (sawDone && sentinelWriter != null) {
+        await sentinelWriter!.clear(diskId);
+      }
+    }
+  }
+
+  /// Platform-specific launch surface, factored out so tests can
+  /// substitute an in-memory event stream without spawning a real
+  /// process. Production callers should not override this.
+  @visibleForTesting
+  Stream<FlashProgress> launchHelper(List<String> args) {
+    if (Platform.isWindows) return _runWindows(args);
+    if (Platform.isMacOS) return _runMacOs(args);
+    return _runLinux(args);
   }
 
   // -----------------------------------------------------------------
   // Windows: PowerShell Start-Process -Verb RunAs. Helper output is
   // redirected to a tempfile; we tail it for JSON progress events.
+  //
+  // Race: the previous implementation's poll loop exited on
+  // `ps.exitCode`, which was set the instant PowerShell finished —
+  // but the stdout-redirected file might not have been flushed to
+  // disk yet (NTFS buffers + PowerShell's own close sequence happen
+  // asynchronously). The drain step tried to recover but mixed
+  // string-index and byte-offset arithmetic, losing UTF-8 characters
+  // or data held in `carry`. This rewrite does two things:
+  //   1. Never exit the tail loop until we've done one read strictly
+  //      after the process was observed as exited AND the file size
+  //      has stopped growing. That guarantees the final progress
+  //      event is observed even if it lands after exitCode fires.
+  //   2. Use a single byte-offset + UTF-8 decoder across the loop and
+  //      drain so partial characters or unfinished lines are never
+  //      dropped between phases.
 
   Stream<FlashProgress> _runWindows(List<String> helperArgs) async* {
     final stdoutFile = File(
@@ -78,7 +139,6 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
       'exit \$p.ExitCode',
     ].join();
 
-    final completer = Completer<int>();
     final ps = await Process.start('powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
@@ -86,54 +146,73 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
       psCommand,
     ], runInShell: false);
 
-    ps.exitCode.then(completer.complete);
+    final exitFuture = ps.exitCode;
+    var processExited = false;
+    exitFuture.then((_) => processExited = true);
 
-    // Tail the redirected stdout until the process exits. We poll at a
-    // modest rate because the helper emits at ~4Hz and the file I/O is
-    // cheap.
     var offset = 0;
+    final decoder = const Utf8Decoder(allowMalformed: true);
     final carry = StringBuffer();
 
+    Future<List<FlashProgress>> readChunkOnce() async {
+      final events = <FlashProgress>[];
+      final len = await stdoutFile.length();
+      if (len <= offset) return events;
+      final raf = await stdoutFile.open();
+      try {
+        await raf.setPosition(offset);
+        final bytes = await raf.read(len - offset);
+        offset = len;
+        final chunk = decoder.convert(bytes);
+        carry.write(chunk);
+        var s = carry.toString();
+        var nl = s.indexOf('\n');
+        while (nl >= 0) {
+          final line = s.substring(0, nl).trimRight();
+          s = s.substring(nl + 1);
+          final ev = _parseHelperLine(line);
+          if (ev != null) events.add(ev);
+          nl = s.indexOf('\n');
+        }
+        carry
+          ..clear()
+          ..write(s);
+      } finally {
+        await raf.close();
+      }
+      return events;
+    }
+
     try {
-      while (!completer.isCompleted) {
+      while (!processExited) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
-        final len = await stdoutFile.length();
-        if (len > offset) {
-          final raf = await stdoutFile.open();
-          await raf.setPosition(offset);
-          final bytes = await raf.read(len - offset);
-          await raf.close();
-          offset = len;
-          final chunk = utf8.decode(bytes, allowMalformed: true);
-          carry.write(chunk);
-          var s = carry.toString();
-          var nl = s.indexOf('\n');
-          while (nl >= 0) {
-            final line = s.substring(0, nl).trimRight();
-            s = s.substring(nl + 1);
-            final ev = _parseHelperLine(line);
-            if (ev != null) yield ev;
-            nl = s.indexOf('\n');
-          }
-          carry
-            ..clear()
-            ..write(s);
+        for (final ev in await readChunkOnce()) {
+          yield ev;
         }
       }
-      // Drain remainder.
-      final remainder = await stdoutFile.readAsString();
-      if (remainder.length > offset) {
-        final tail = remainder.substring(offset);
-        for (final line in const LineSplitter().convert(tail)) {
-          final ev = _parseHelperLine(line);
-          if (ev != null) yield ev;
+      // Drain after exit: PowerShell may still be flushing redirected
+      // stdout. Keep reading until the file size is stable across two
+      // passes so we can't miss the final `done` event.
+      await exitFuture;
+      var stableSize = -1;
+      for (var i = 0; i < 20; i++) {
+        for (final ev in await readChunkOnce()) {
+          yield ev;
         }
+        final size = await stdoutFile.length();
+        if (size == stableSize && size == offset) break;
+        stableSize = size;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      // Any unterminated trailing line gets one last parse attempt.
+      if (carry.isNotEmpty) {
+        final ev = _parseHelperLine(carry.toString().trimRight());
+        if (ev != null) yield ev;
+        carry.clear();
       }
 
-      final exit = await completer.future;
+      final exit = await exitFuture;
       if (exit != 0) {
-        // Surface any captured stderr in the exception message so the
-        // user isn't staring at a bare exit code.
         String? errTail;
         try {
           if (await stderrFile.exists()) {
@@ -149,9 +228,6 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
         );
       }
     } finally {
-      // Best-effort cleanup. We don't surface errors here: the log
-      // files are in %TEMP% and Windows will reap them on its own
-      // schedule anyway.
       for (final f in [stdoutFile, stderrFile]) {
         try {
           if (await f.exists()) await f.delete();
@@ -251,6 +327,16 @@ class ProcessElevatedHelperService implements ElevatedHelperService {
     }
   }
 }
+
+/// Test-only re-export of [_parseHelperLine]. The platform-specific
+/// `_runWindows` / `_runMacOs` / `_runLinux` paths can't be unit-
+/// tested without spawning a real elevated process, but the parser
+/// they all funnel through is OS-agnostic and load-bearing — every
+/// `event:done` / `event:error` line the helper emits goes through
+/// here. Tests use this seam to pin the contract.
+@visibleForTesting
+FlashProgress? parseHelperLineForTesting(String line) =>
+    _parseHelperLine(line);
 
 FlashProgress? _parseHelperLine(String line) {
   if (line.trim().isEmpty) return null;

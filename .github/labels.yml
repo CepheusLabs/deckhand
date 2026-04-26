@@ -1,0 +1,27 @@
+- name: dependencies
+  color: 0366d6
+  description: Pull requests that update a dependency.
+- name: ci
+  color: c2e0c6
+  description: GitHub Actions / CI configuration.
+- name: sidecar
+  color: 5319e7
+  description: Go sidecar (deckhand-sidecar / elevated helper).
+- name: flutter
+  color: 0e8a16
+  description: Flutter / Dart packages.
+- name: app
+  color: bfdadc
+  description: The /app top-level Flutter binary.
+- name: security-sensitive
+  color: b60205
+  description: Touches a security-critical surface (disks, profile-script, profile-lint).
+- name: bug
+  color: d73a4a
+  description: Something is not behaving as documented.
+- name: enhancement
+  color: a2eeef
+  description: Net-new capability.
+- name: triage
+  color: ededed
+  description: Awaiting maintainer review.

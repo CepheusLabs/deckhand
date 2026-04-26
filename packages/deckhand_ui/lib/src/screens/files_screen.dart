@@ -132,11 +132,17 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
                   _deleteSelected.contains(f.id) ? 'delete' : 'keep',
                 );
           }
-          if (context.mounted) context.go('/hardening');
+          if (!context.mounted) return;
+          // Stock-keep flow inserts the snapshot screen between
+          // files and hardening. Profiles without snapshot_paths
+          // declared still see the screen (with a "no paths" copy)
+          // so the navigation stays predictable.
+          final hasSnapshotStep = controller.state.flow == WizardFlow.stockKeep;
+          context.go(hasSnapshotStep ? '/snapshot' : '/hardening');
         },
       ),
       secondaryActions: [
-        WizardAction(label: t.common.action_back, onPressed: () => context.go('/services')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/services'), isBack: true),
       ],
     );
   }

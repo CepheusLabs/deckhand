@@ -2,7 +2,7 @@
 ///
 /// This package is UI-agnostic and host-agnostic. Concrete implementations
 /// of the service interfaces live in their own packages.
-library deckhand_core;
+library;
 
 export 'src/errors.dart';
 export 'src/logging.dart';
@@ -18,6 +18,12 @@ export 'src/services/moonraker_service.dart';
 export 'src/services/upstream_service.dart';
 export 'src/services/security_service.dart';
 export 'src/services/elevated_helper_service.dart';
+export 'src/services/archive_service.dart';
+export 'src/services/doctor_service.dart';
+export 'src/diagnostics/bundle.dart';
+export 'src/diagnostics/redactor.dart';
+export 'src/trust/trust_keyring.dart';
 export 'src/wizard/dsl.dart';
 export 'src/wizard/printer_state_probe.dart';
+export 'src/wizard/run_state.dart';
 export 'src/wizard/wizard_controller.dart';

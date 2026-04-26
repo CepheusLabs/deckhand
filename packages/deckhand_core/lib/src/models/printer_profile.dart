@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-/// Strongly-typed model of a parsed `profile.yaml` from deckhand-builds.
+/// Strongly-typed model of a parsed `profile.yaml` from deckhand-profiles.
 ///
 /// Fields match the authoritative spec in
-/// deckhand-builds/AUTHORING.md. Unknown fields are preserved in the
+/// deckhand-profiles/AUTHORING.md. Unknown fields are preserved in the
 /// backing map (`raw`) so the app can roundtrip without data loss.
 class PrinterProfile {
   const PrinterProfile({
@@ -195,7 +195,7 @@ class PrinterMatch {
       }
       // Non-JSON or JSON without profile_id: still Deckhand-ish,
       // still a soft confirmation.
-      return PrinterMatch(
+      return const PrinterMatch(
         confidence: PrinterMatchConfidence.confirmed,
         reason: 'Deckhand marker file present',
       );
@@ -553,11 +553,20 @@ class StockOsInventory {
     this.services = const [],
     this.files = const [],
     this.paths = const [],
+    this.snapshotPaths = const [],
   });
   final List<DetectionRule> detections;
   final List<StockService> services;
   final List<StockFile> files;
   final List<StockPath> paths;
+
+  /// Profile-declared paths to capture in the S145-snapshot screen
+  /// before a stock-keep install rewrites them. See
+  /// [docs/WIZARD-FLOW.md] (S145-snapshot). Empty means the profile
+  /// has nothing to snapshot — Deckhand still renders the screen with
+  /// a "no paths declared" message rather than skipping it silently,
+  /// so users can confirm there really is nothing worth preserving.
+  final List<StockSnapshotPath> snapshotPaths;
 
   factory StockOsInventory.fromJson(Map<String, dynamic> j) => StockOsInventory(
     detections: _listOfMap(
@@ -566,7 +575,35 @@ class StockOsInventory {
     services: _listOfMap(j['services']).map(StockService.fromJson).toList(),
     files: _listOfMap(j['files']).map(StockFile.fromJson).toList(),
     paths: _listOfMap(j['paths']).map(StockPath.fromJson).toList(),
+    snapshotPaths: _listOfMap(j['snapshot_paths'])
+        .map(StockSnapshotPath.fromJson)
+        .toList(),
   );
+}
+
+class StockSnapshotPath {
+  const StockSnapshotPath({
+    required this.id,
+    required this.displayName,
+    required this.path,
+    required this.defaultSelected,
+    this.helperText,
+  });
+
+  final String id;
+  final String displayName;
+  final String path;
+  final bool defaultSelected;
+  final String? helperText;
+
+  factory StockSnapshotPath.fromJson(Map<String, dynamic> j) =>
+      StockSnapshotPath(
+        id: j['id'] as String,
+        displayName: j['display_name'] as String? ?? j['id'] as String,
+        path: j['path'] as String,
+        defaultSelected: j['default_selected'] as bool? ?? true,
+        helperText: j['helper_text'] as String?,
+      );
 }
 
 class DetectionRule {

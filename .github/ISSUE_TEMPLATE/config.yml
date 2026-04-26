@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/CepheusLabs/deckhand/security/advisories/new
+    about: >
+      Please report security issues privately. Do NOT open a public
+      issue for anything that could affect users already running a
+      signed release.
+  - name: Add or fix a printer profile
+    url: https://github.com/CepheusLabs/deckhand-profiles
+    about: >
+      Printer profiles (the YAML files that drive Deckhand) live in
+      the separate deckhand-profiles repo.

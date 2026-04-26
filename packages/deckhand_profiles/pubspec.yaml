@@ -1,5 +1,5 @@
 name: deckhand_profiles
-description: Fetch and parse Deckhand printer profiles from deckhand-builds.
+description: Fetch and parse Deckhand printer profiles from deckhand-profiles.
 version: 0.1.0
 publish_to: none
 
@@ -20,3 +20,5 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  deckhand_lints:
+    path: ../deckhand_lints

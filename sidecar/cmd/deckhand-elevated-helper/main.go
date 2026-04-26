@@ -11,9 +11,10 @@
 //   - No network access (enforced: this binary uses no http/net packages).
 //
 // Usage:
-//   deckhand-elevated-helper write-image \
-//     --image <path> --target <disk_id> --token <confirmation_token> \
-//     [--verify] [--sha256 <hex>]
+//
+//	deckhand-elevated-helper write-image \
+//	  --image <path> --target <disk_id> --token <confirmation_token> \
+//	  [--verify] [--sha256 <hex>]
 package main
 
 import (
@@ -29,6 +30,7 @@ import (
 	"time"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=...".
 var Version = "0.0.0-dev"
 
 func main() {
@@ -85,7 +87,7 @@ func runWriteImage(args []string) {
 	if err != nil {
 		fatalf("open image: %v", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	// Total size for progress reporting.
 	var total int64
@@ -101,7 +103,7 @@ func runWriteImage(args []string) {
 	if err != nil {
 		fatalf("open device: %v", err)
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	hasher := sha256.New()
 	mw := io.MultiWriter(dst, hasher)
@@ -169,7 +171,7 @@ func verifyDevice(devicePath string, expectBytes int64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open for verify: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	buf := make([]byte, 4<<20)

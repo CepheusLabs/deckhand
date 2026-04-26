@@ -81,14 +81,14 @@ void main() {
         );
         await controller.loadProfile('test-printer');
         controller.setFlow(WizardFlow.stockKeep);
-        controller.printerStateForTesting = PrinterState(
-          services: const {},
-          files: const {},
-          paths: const {},
-          stackInstalls: const {},
-          screenInstalls: const {},
+        controller.printerStateForTesting = const PrinterState(
+          services: {},
+          files: {},
+          paths: {},
+          stackInstalls: {},
+          screenInstalls: {},
           python311Installed: false,
-          deckhandBackups: const [
+          deckhandBackups: [
             DeckhandBackup(
               originalPath: '/etc/fstab',
               backupPath: '/etc/fstab.deckhand-pre-1776910000000',
@@ -98,14 +98,14 @@ void main() {
           probedAt: null,
         );
         // Use force probedAt so the screen thinks probe finished.
-        controller.printerStateForTesting = PrinterState(
-          services: const {},
-          files: const {},
-          paths: const {},
-          stackInstalls: const {},
-          screenInstalls: const {},
+        controller.printerStateForTesting = const PrinterState(
+          services: {},
+          files: {},
+          paths: {},
+          stackInstalls: {},
+          screenInstalls: {},
           python311Installed: false,
-          deckhandBackups: const [
+          deckhandBackups: [
             DeckhandBackup(
               originalPath: '/etc/fstab',
               backupPath: '/etc/fstab.deckhand-pre-1776910000000',

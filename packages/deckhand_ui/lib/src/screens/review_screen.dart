@@ -140,6 +140,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/hardening'),
+          isBack: true,
         ),
       ],
     );

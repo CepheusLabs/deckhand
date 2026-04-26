@@ -1,0 +1,56 @@
+# HITL scenario: simulated mid-flash crash to exercise the
+# interrupted-flash sentinel detection. See
+# docs/ARCHITECTURE.md#interrupted-flash-detection.
+#
+# Pre-condition (rig setup):
+#   The rig's flash step is wrapped by a "killer" that SIGKILLs
+#   deckhand-elevated-helper at a known offset. The killer lives in
+#   packaging/hitl/scripts/sentinel-killer.* and is invoked by
+#   reset-rig.* before the scenario starts.
+#
+# What this scenario asserts:
+#   1. After a simulated mid-flash crash, the on-host sentinel file
+#      survives.
+#   2. A subsequent disks.list returns the target disk with
+#      `interrupted_flash` populated (verified via the doctor.run
+#      output that includes a disks.list dump).
+#   3. The wizard's flash_disk step is recorded as `failed` (not
+#      `completed`) in the run-state file.
+
+scenario_version: 1
+profile: sovol_zero
+flow: fresh_flash
+
+printer:
+  host: 192.0.2.40
+  ssh:
+    user: mks
+    password_env: PRINTER_PASS
+    # Sentinel-test runs through fresh-flash semantics (the
+    # simulated mid-flash crash leaves the OS in an unknown state),
+    # so TOFU is appropriate here too.
+    accept_host_key: true
+
+decisions:
+  os_image: armbian-bookworm
+  hostname: sovol-zero-hitl
+  webui: mainsail
+
+expectations:
+  # The flash step must be recorded as failed; later steps never
+  # ran, so they're absent (the runner treats a step we ASKED about
+  # but the run-state never saw as a status of `<missing>`, which
+  # the assertion `expected=failed` does NOT match — flag it).
+  step_status:
+    fresh_flash.flash_disk: failed
+  remote_files:
+    # The on-host sentinel is the canonical record. We assert via a
+    # remote-file path because the runner's existing assertion shape
+    # is "remote", but the sentinel actually lives on the rig host.
+    # The sentinel-test rig setup mounts <data_dir>/state/flash-
+    # sentinels over the printer's /mnt/host-state via NFS so the
+    # canonical assertion works through the same SSH connection.
+    - path: /mnt/host-state/flash-sentinels
+      must_exist: true
+
+max_duration_minutes: 15

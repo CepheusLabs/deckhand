@@ -1,13 +1,14 @@
 import 'dart:io';
 
+import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
-import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
+import '../widgets/wizard_scaffold.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -38,7 +39,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _save() async {
     final raw = _localDirController.text.trim();
     if (raw.isNotEmpty) {
-      // Validate: must exist, must look like a deckhand-builds checkout
+      // Validate: must exist, must look like a deckhand-profiles checkout
       // (registry.yaml at the top + a printers/ subdir).
       final ok = await Directory(raw).exists() &&
           await File('$raw/registry.yaml').exists();
@@ -151,11 +152,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: Text('Appearance'),
             subtitle: Text('Theme, density'),
           ),
+          _LocalePickerTile(
+            settings: ref.read(deckhandSettingsProvider),
+            onChanged: () => setState(() {}),
+          ),
         ],
       ),
       primaryAction: WizardAction(
         label: t.common.action_back,
         onPressed: () => context.go('/'),
+        isBack: true,
+      ),
+    );
+  }
+}
+
+/// Picker for the UI language. Drives `LocaleSettings` directly so
+/// the change is visible immediately without an app restart, and
+/// persists the choice to `DeckhandSettings.preferredLocale` so the
+/// next launch picks up the same locale before the first frame.
+class _LocalePickerTile extends StatelessWidget {
+  const _LocalePickerTile({required this.settings, required this.onChanged});
+  final DeckhandSettings settings;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = LocaleSettings.currentLocale;
+    return ListTile(
+      title: const Text('Language'),
+      subtitle: const Text('Switches the wizard UI language. Falls back '
+          'to English for any string not yet translated.'),
+      trailing: DropdownButton<AppLocale>(
+        value: current,
+        onChanged: (locale) async {
+          if (locale == null) return;
+          LocaleSettings.setLocale(locale);
+          settings.preferredLocale = locale.languageCode;
+          await settings.save();
+          onChanged();
+        },
+        items: [
+          for (final l in AppLocale.values)
+            DropdownMenuItem(
+              value: l,
+              child: Text(l.languageCode.toUpperCase()),
+            ),
+        ],
       ),
     );
   }

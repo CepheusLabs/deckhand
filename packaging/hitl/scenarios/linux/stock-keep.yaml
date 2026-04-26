@@ -1,0 +1,63 @@
+# Reference HITL scenario: Sovol Zero, stock-keep flow.
+#
+# Schema is consumed by `cmd/deckhand-hitl/main.dart` (the headless
+# wizard driver). See docs/HITL.md for the contract.
+#
+# This file is the canonical example — copy + adapt for new
+# (rig, flow) combinations.
+
+scenario_version: 1
+profile: sovol_zero
+flow: stock_keep
+
+printer:
+  host: 192.0.2.40
+  ssh:
+    user: mks
+    # Driver reads the password from the named env var, never from
+    # the YAML itself. The HITL workflow injects HITL_PRINTER_PASS
+    # from a runner-host secret.
+    password_env: PRINTER_PASS
+
+# Decisions to feed the wizard. Keys mirror the wizard state's
+# decision tree; unknown keys cause the driver to fail loud rather
+# than silently advancing with defaults.
+decisions:
+  firmware: kalico
+  webui: mainsail
+  kiauh: true
+  hardening:
+    disable_makerbase_udp: true
+    change_default_password: false   # no point in CI; we own the printer
+  files:
+    select_all: true                  # delete the vendor leftovers
+  services:
+    frpc: remove
+    phrozen_master: stub
+
+# Steps the driver expects to see complete. Fail-loud catch for a
+# regression where an entire phase of the install silently no-ops.
+expectations:
+  step_status:
+    stock_keep.firmware_clone: completed
+    stock_keep.webui_install: completed
+    stock_keep.services_apply: completed
+    stock_keep.files_apply: completed
+    stock_keep.kiauh_install: completed
+  ports:
+    7125: open    # Moonraker
+    80: open      # Mainsail
+  # Files we expect to find on the printer after install. Lets us
+  # catch "the install lied about completing" regressions.
+  remote_files:
+    - path: ~/klipper/klippy/klippy.py
+      must_exist: true
+    - path: ~/printer_data
+      must_exist: true
+    - path: ~/.deckhand/run-state.json
+      must_exist: true
+
+# Optional: hard cap on flow duration. If the rig takes longer
+# than this, fail with a "drift detected" error so we notice
+# slowdowns before users do.
+max_duration_minutes: 35

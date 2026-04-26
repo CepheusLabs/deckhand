@@ -17,6 +17,7 @@ dependencies:
   path_provider: ^2.1.0
   path: ^1.9.0
   cupertino_icons: ^1.0.8
+  window_manager: ^0.4.3
 
   deckhand_core:
     path: ../packages/deckhand_core
@@ -35,6 +36,25 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  deckhand_lints:
+    path: ../packages/deckhand_lints
+
+# Pin transitive archive to a single version across the dep graph.
+# deckhand_core declares the runtime requirement; this override
+# protects every package in the workspace from the cross-package
+# version drift documented in deckhand_core's pubspec comment.
+dependency_overrides:
+  archive: 4.0.9
 
 flutter:
   uses-material-design: true
+  assets:
+    # Profile-trust keyring. See docs/PROFILE-TRUST.md. Lives at
+    # `app/assets/keyring.asc` rather than under deckhand_core's
+    # tree because the `packages/<pkg>/...` asset indirection
+    # requires the owning package to declare a `flutter:` assets
+    # block, and deckhand_core is deliberately pure-Dart so the
+    # HITL driver can compile against it. The canonical asset key
+    # is `TrustKeyring.assetKey` in deckhand_core; the loader is
+    # `loadBundledTrustKeyring` in deckhand_ui.
+    - assets/keyring.asc

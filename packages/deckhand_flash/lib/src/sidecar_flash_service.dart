@@ -5,10 +5,16 @@ import 'package:deckhand_core/deckhand_core.dart';
 import 'sidecar_client.dart';
 
 /// [FlashService] that delegates every operation to the Go sidecar.
+///
+/// Dry-run: when [dryRun] is true every destructive side effect is
+/// replaced by a synthetic progress stream that reports a realistic
+/// phase sequence without touching the disk. The UI can remain
+/// unchanged; only the service layer is aware.
 class SidecarFlashService implements FlashService {
-  SidecarFlashService(this._client);
+  SidecarFlashService(this._client, {this.dryRun = false});
 
-  final SidecarClient _client;
+  final SidecarConnection _client;
+  final bool dryRun;
 
   @override
   Future<List<DiskInfo>> listDisks() async {
@@ -24,6 +30,11 @@ class SidecarFlashService implements FlashService {
     required String confirmationToken,
     bool verifyAfterWrite = true,
   }) {
+    if (dryRun) {
+      return _simulatedProgress(
+        label: 'DRY-RUN write $imagePath -> $diskId',
+      );
+    }
     return _client
         .callStreaming('disks.write_image', {
           'image_path': imagePath,
@@ -39,6 +50,11 @@ class SidecarFlashService implements FlashService {
     required String diskId,
     required String outputPath,
   }) {
+    if (dryRun) {
+      return _simulatedProgress(
+        label: 'DRY-RUN read $diskId -> $outputPath',
+      );
+    }
     return _client
         .callStreaming('disks.read_image', {
           'device_id': diskId,
@@ -49,9 +65,40 @@ class SidecarFlashService implements FlashService {
 
   @override
   Future<String> sha256(String path) async {
+    if (dryRun) {
+      // Return a deterministic, clearly-synthetic digest so callers
+      // don't branch on real vs. dry-run at the type level.
+      return 'dryrun' * 10 + 'dddd';
+    }
     final res = await _client.call('disks.hash', {'path': path});
     return res['sha256'] as String;
   }
+}
+
+Stream<FlashProgress> _simulatedProgress({required String label}) async* {
+  yield FlashProgress(
+    bytesDone: 0,
+    bytesTotal: 1024 * 1024 * 1024,
+    phase: FlashPhase.preparing,
+    message: label,
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  for (final pct in const [0.25, 0.5, 0.75, 1.0]) {
+    final total = 1024 * 1024 * 1024;
+    yield FlashProgress(
+      bytesDone: (total * pct).round(),
+      bytesTotal: total,
+      phase: FlashPhase.writing,
+      message: label,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+  yield FlashProgress(
+    bytesDone: 1024 * 1024 * 1024,
+    bytesTotal: 1024 * 1024 * 1024,
+    phase: FlashPhase.done,
+    message: '$label (simulated)',
+  );
 }
 
 DiskInfo _diskFromJson(Map raw) {

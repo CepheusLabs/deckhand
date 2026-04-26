@@ -69,11 +69,12 @@ class MoonrakerHttpService implements MoonrakerService {
         options: Options(responseType: ResponseType.plain),
       );
       return res.data;
-    } on DioException catch (e) {
-      // 404 when the file doesn't exist; anything else is either
-      // Moonraker not responding or a permission issue - both are
-      // treated the same (no identification signal).
-      if (e.response?.statusCode == 404) return null;
+    } on DioException {
+      // Any HTTP-level failure (404 missing file, 401 permission,
+      // connection refused) is the same signal at this layer: we
+      // didn't get a marker file, so the caller falls back to
+      // softer identification signals. Non-Dio failures (TLS, DNS,
+      // OOM) are caught below for the same reason.
       return null;
     } catch (_) {
       return null;

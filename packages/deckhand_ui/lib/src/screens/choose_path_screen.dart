@@ -66,7 +66,7 @@ class _ChoosePathScreenState extends ConsumerState<ChoosePathScreen> {
         },
       ),
       secondaryActions: [
-        WizardAction(label: t.common.action_back, onPressed: () => context.go('/verify')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/verify'), isBack: true),
       ],
     );
   }

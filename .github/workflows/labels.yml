@@ -1,0 +1,28 @@
+name: Sync labels
+
+# Reconciles GitHub labels against `.github/labels.yml`. Dependabot
+# does NOT auto-create labels — it silently drops any that don't
+# exist. Running this workflow on every change to labels.yml (and
+# manually) keeps the repo's label set in sync with what
+# dependabot.yml + the issue templates assume exists.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.yml', '.github/workflows/labels.yml']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          delete-other-labels: false
+          dry-run: false

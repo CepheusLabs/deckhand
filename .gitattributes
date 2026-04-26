@@ -1,8 +1,50 @@
+# Default: normalize to LF in the repo.
 * text=auto eol=lf
-*.bat text eol=crlf
-*.ps1 text eol=crlf
-*.ico binary
-*.png binary
-*.jpg binary
-*.woff2 binary
-*.ttf binary
+
+# Windows-native scripts must keep CRLF — iscc.exe and PowerShell
+# choke on bare LF under some shells.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Known-binary formats — never touch line endings.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.icns   binary
+*.pdf    binary
+*.zip    binary
+*.tar    binary
+*.gz     binary
+*.xz     binary
+*.7z     binary
+*.dmg    binary
+*.exe    binary
+*.dll    binary
+*.so     binary
+*.dylib  binary
+*.woff2  binary
+*.ttf    binary
+
+# SVG is text but keep LF explicit so Windows checkouts don't flip.
+*.svg    text eol=lf
+
+# Lock + generated files — don't diff them by default in PRs.
+*.g.dart          linguist-generated=true
+*.freezed.dart    linguist-generated=true
+*.lock            linguist-generated=true
+go.sum            linguist-generated=true
+pubspec.lock      linguist-generated=true
+
+# Site assets — don't let GitHub misclassify language stats.
+site/**/*.js    linguist-vendored=false
+site/**/*.css   linguist-vendored=false
+
+# Test fixtures shouldn't dominate language breakdowns.
+**/test/fixtures/**   linguist-detectable=false
+
+# Language hints for files GitHub sometimes misidentifies.
+*.iss    linguist-language=Inno-Setup

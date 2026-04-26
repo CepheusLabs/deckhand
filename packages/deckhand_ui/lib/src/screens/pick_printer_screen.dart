@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
+import '../widgets/deckhand_stepper.dart';
+import '../widgets/host_approval_gate.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/wizard_scaffold.dart';
-import '../widgets/deckhand_stepper.dart';
 
 class PickPrinterScreen extends ConsumerStatefulWidget {
   const PickPrinterScreen({super.key});
@@ -17,17 +18,24 @@ class PickPrinterScreen extends ConsumerStatefulWidget {
 }
 
 class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
-  late Future<ProfileRegistry> _registryFuture;
+  Future<ProfileRegistry>? _registryFuture;
   String? _selectedId;
 
-  @override
-  void initState() {
-    super.initState();
-    _registryFuture = ref.read(profileServiceProvider).fetchRegistry();
+  Future<ProfileRegistry> _fetchRegistry(BuildContext context) {
+    // The fetch goes through HostApprovalGate so the network allow-
+    // list prompt fires before the actual HTTP / git call. The gate
+    // either approves + retries, or rethrows HostNotApprovedException
+    // for the FutureBuilder to render via _ErrorBox.
+    return HostApprovalGate.runGuarded<ProfileRegistry>(
+      ref,
+      context,
+      action: () => ref.read(profileServiceProvider).fetchRegistry(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    _registryFuture ??= _fetchRegistry(context);
     return FutureBuilder<ProfileRegistry>(
       future: _registryFuture,
       builder: (context, snap) {
@@ -38,9 +46,7 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
           body = _ErrorBox(
             message: 'Failed to load printer registry: ${snap.error}',
             onRetry: () => setState(() {
-              _registryFuture = ref
-                  .read(profileServiceProvider)
-                  .fetchRegistry();
+              _registryFuture = _fetchRegistry(context);
             }),
           );
         } else {
@@ -74,12 +80,16 @@ class _PickPrinterScreenState extends ConsumerState<PickPrinterScreen> {
                 ? null
                 : () async {
                     final controller = ref.read(wizardControllerProvider);
-                    await controller.loadProfile(_selectedId!);
+                    await HostApprovalGate.runGuarded<void>(
+                      ref,
+                      context,
+                      action: () => controller.loadProfile(_selectedId!),
+                    );
                     if (context.mounted) context.go('/connect');
                   },
           ),
           secondaryActions: [
-            WizardAction(label: t.common.action_back, onPressed: () => context.go('/')),
+            WizardAction(label: t.common.action_back, onPressed: () => context.go('/'), isBack: true),
           ],
         );
       },

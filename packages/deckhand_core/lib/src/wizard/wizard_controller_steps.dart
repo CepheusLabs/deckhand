@@ -145,7 +145,7 @@ Future<void> _runWriteFileImpl(
     final ownerArg = owner != null ? '-o ${c._shellQuote(owner)} ' : '';
     final String cmd;
     if (useSudo) {
-      cmd = 'sudo install ${modeArg}${ownerArg}$qTmp $qTarget && rm -f $qTmp';
+      cmd = 'sudo install $modeArg$ownerArg$qTmp $qTarget && rm -f $qTmp';
     } else {
       final chmod = mode != null
           ? ' && chmod ${mode.toRadixString(8)} $qTarget'

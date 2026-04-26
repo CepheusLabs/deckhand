@@ -12,9 +12,28 @@ Klipper-based 3D printers.
   layout, sidecar model, cross-platform packaging.
 - [`docs/WIZARD-FLOW.md`](docs/WIZARD-FLOW.md) - screen-by-screen UX
   specification for the install wizard.
+- [`docs/IPC.md`](docs/IPC.md) - sidecar JSON-RPC method catalog plus
+  the supervisor's crash-recovery policy.
+
+Cross-cutting properties, each large enough to live on its own:
+
+- [`docs/STEP-IDEMPOTENCY.md`](docs/STEP-IDEMPOTENCY.md) - per-step
+  pre-check / resume / post-check contract and the on-printer
+  `~/.deckhand/run-state.json` that drives mid-execution resume.
+- [`docs/PROFILE-TRUST.md`](docs/PROFILE-TRUST.md) - bundled trust
+  keyring, signed-tag verification, rotation procedure.
+- [`docs/DOCTOR.md`](docs/DOCTOR.md) - preflight self-diagnostic
+  (CLI + `doctor.run` RPC + S10 status strip).
+- [`docs/DEBUG-BUNDLES.md`](docs/DEBUG-BUNDLES.md) - what goes into
+  a "Save debug bundle" zip, redaction pipeline, mandatory review
+  screen.
+- [`docs/HITL.md`](docs/HITL.md) - hardware-in-the-loop CI: rigs,
+  scenarios, headless wizard driver.
+- [`docs/RELEASING.md`](docs/RELEASING.md) - tagging, signing,
+  manual smoke-test checklist.
 
 Printer profiles (the per-printer definitions that drive Deckhand) live in
-a separate repo: [CepheusLabs/deckhand-builds][builds]. See the
+a separate repo: [CepheusLabs/deckhand-profiles][builds]. See the
 [authoring guide][authoring] for how to add or modify a profile.
 
 ## What Deckhand does
@@ -40,5 +59,5 @@ disk flashing, shallow git clones, and HTTP fetches. See
 
 [AGPL-3.0](LICENSE).
 
-[builds]: https://github.com/CepheusLabs/deckhand-builds
-[authoring]: https://github.com/CepheusLabs/deckhand-builds/blob/main/AUTHORING.md
+[builds]: https://github.com/CepheusLabs/deckhand-profiles
+[authoring]: https://github.com/CepheusLabs/deckhand-profiles/blob/main/AUTHORING.md

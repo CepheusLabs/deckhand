@@ -1,8 +1,9 @@
 name: CI
 
 on:
-  # CI is manual-only while the code base stabilizes. Once the Flutter +
-  # Go jobs pass reliably, flip push + pull_request triggers back on.
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +42,60 @@ jobs:
         run: go build ./...
 
       - name: go test
-        run: go test -count=1 ./...
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+
+      - name: Coverage gate (overall + per-package)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          report() { go tool cover -func=coverage.out; }
+
+          # Overall floor — a hard ceiling on regression. Disk I/O
+          # paths are genuinely hardware-bound, so this number can't
+          # approach 100%. Raise as the test surface grows; never
+          # lower without explicit justification in the PR.
+          total=$(report | awk '/^total:/ {print $3}')
+          echo "Sidecar coverage (total): $total"
+          min_total=55
+          awk -v a="${total%\%}" -v b="$min_total" \
+            'BEGIN { if (a + 0 < b + 0) exit 1 }' \
+            || { echo "::error::total coverage $total below ${min_total}% floor"; exit 1; }
+
+          # Per-package floors. These call out the packages that are
+          # NOT hardware-bound and therefore expected to stay
+          # well-covered. A regression in any of them (a new
+          # untested function) trips the gate even if the global
+          # number stays acceptable.
+          declare -A min_pkg=(
+            [internal/rpc]=85
+            [internal/logging]=80
+            [internal/hash]=80
+            [internal/doctor]=70
+            [internal/disks]=70
+          )
+          for pkg in "${!min_pkg[@]}"; do
+            actual=$(report | awk -v p="$pkg/" '$1 ~ p {gsub("%","",$3); s+=$3; n++} END { if (n==0) print 0; else printf "%.1f", s/n }')
+            floor=${min_pkg[$pkg]}
+            echo "$pkg coverage: ${actual}%  (floor ${floor}%)"
+            awk -v a="$actual" -v b="$floor" \
+              'BEGIN { if (a + 0 < b + 0) exit 1 }' \
+              || { echo "::error::$pkg coverage ${actual}% below ${floor}% floor"; exit 1; }
+          done
+
+      - uses: golangci/golangci-lint-action@v6
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          version: v2.1.6
+          working-directory: sidecar
+          args: --timeout=5m
+
+      - name: Verify IPC-METHODS.md is up-to-date
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go run ./cmd/deckhand-ipc-docs --check
+        working-directory: sidecar
 
   # ---------------------------------------------------------------
   # Flutter / Dart packages — analyze + test + format each package in
@@ -60,6 +114,8 @@ jobs:
           - packages/deckhand_discovery
           - packages/deckhand_ui
           - packages/deckhand_profile_script
+          - packages/deckhand_profile_lint
+          - packages/deckhand_lints
           - app
       fail-fast: false
 
@@ -92,17 +148,98 @@ jobs:
 
       - name: test
         working-directory: ${{ matrix.package }}
-        # Test step is tolerated for now — most packages have no tests yet.
-        run: flutter test || true
+        run: |
+          if [ -d test ]; then
+            flutter test --coverage --reporter=expanded
+          else
+            echo "No test/ directory in ${{ matrix.package }} — skipping."
+          fi
+
+      # Per-package Dart coverage floor. Hardware-bound packages
+      # (deckhand_flash, deckhand_discovery, deckhand_ssh) have lower
+      # floors because their code paths require a real printer; the
+      # pure-logic packages stay tight. Set to 0 to opt out (config-
+      # only packages like deckhand_lints).
+      - name: Coverage floor
+        if: hashFiles(format('{0}/coverage/lcov.info', matrix.package)) != ''
+        working-directory: ${{ matrix.package }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compute hits/found across the whole package. lcov.info is
+          # a sequence of `LH:<n>` (lines hit) + `LF:<n>` (lines
+          # found) records; awk sums them and emits a percentage.
+          read hit found < <(
+            awk -F: '/^LH:/{h+=$2} /^LF:/{f+=$2} END {print h, f}' \
+              coverage/lcov.info
+          )
+          if [ "$found" = "0" ]; then
+            echo "No lines covered in ${{ matrix.package }}; skipping floor"
+            exit 0
+          fi
+          pct=$(awk -v h="$hit" -v f="$found" 'BEGIN { printf "%.1f", (h*100)/f }')
+          case "${{ matrix.package }}" in
+            packages/deckhand_core)            floor=70 ;;
+            packages/deckhand_ui)              floor=60 ;;
+            packages/deckhand_profile_script)  floor=80 ;;
+            packages/deckhand_profile_lint)    floor=80 ;;
+            packages/deckhand_profiles)        floor=40 ;;
+            packages/deckhand_ssh)             floor=20 ;;
+            packages/deckhand_flash)           floor=30 ;;
+            packages/deckhand_discovery)       floor=30 ;;
+            *)                                 floor=0  ;;
+          esac
+          echo "${{ matrix.package }} coverage: ${pct}% (floor ${floor}%)"
+          awk -v a="$pct" -v b="$floor" \
+            'BEGIN { if (a + 0 < b + 0) exit 1 }' \
+            || { echo "::error::${{ matrix.package }} coverage ${pct}% below ${floor}% floor"; exit 1; }
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}-${{ strategy.job-index }}
+          path: ${{ matrix.package }}/coverage/lcov.info
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ---------------------------------------------------------------
-  # Validate every profile.yaml in deckhand-builds. Enabled once the
-  # validator binary is built and published as a release asset.
+  # Validate every profile.yaml in deckhand-profiles. Builds the lint
+  # binary from sources and runs it over a shallow clone of the
+  # builds repo.
   # ---------------------------------------------------------------
+  scripts:
+    name: Python scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run scripts test suite
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
+
   profile-lint:
     name: Profile YAML lint
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v5
-      - run: echo "enable once ./sidecar/cmd/deckhand-profile-lint is built"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.9"
+          channel: stable
+          cache: true
+
+      - name: Shallow-clone deckhand-profiles
+        run: git clone --depth=1 https://github.com/CepheusLabs/deckhand-profiles.git builds
+
+      - name: Pub get
+        working-directory: packages/deckhand_profile_lint
+        run: dart pub get
+
+      - name: Lint every profile
+        working-directory: packages/deckhand_profile_lint
+        run: dart run bin/deckhand_profile_lint.dart --root ../../builds --schema ../../builds/schema/profile.schema.json --strict

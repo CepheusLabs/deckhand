@@ -1,0 +1,44 @@
+# HITL scenario: stock-config snapshot capture + side-by-side
+# restore. See docs/WIZARD-FLOW.md (S145-snapshot).
+#
+# Pre-condition (rig setup):
+#   The printer's ~/printer_data/config/printer.cfg contains a
+#   well-known marker line. The post-install assertions verify the
+#   marker survives into <data_dir>/state/snapshots/<name>.tar.gz
+#   (read back via the SSH-mounted host-state path) and that the
+#   side-by-side restore produced a printer_data.stock-* directory.
+
+scenario_version: 1
+profile: sovol_zero
+flow: stock_keep
+
+printer:
+  host: 192.0.2.40
+  ssh:
+    user: mks
+    password_env: PRINTER_PASS
+
+decisions:
+  firmware: kalico
+  webui: mainsail
+  kiauh: true
+  snapshot:
+    paths:
+      - config
+      - klippy_extras
+    restore_strategy: side_by_side
+
+expectations:
+  step_status:
+    stock_keep.snapshot_archive: completed
+    stock_keep.firmware_clone: completed
+  remote_files:
+    # Side-by-side restore directory — the wizard's post-install
+    # restore step (run with restore_strategy=side_by_side) lands
+    # the unpacked archive here.
+    - path: ~/printer_data.stock-merge
+      must_exist: true
+  ports:
+    7125: open
+
+max_duration_minutes: 35

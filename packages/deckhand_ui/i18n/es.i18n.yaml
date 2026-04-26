@@ -1,0 +1,34 @@
+# Deckhand UI - Spanish strings
+#
+# Coverage status: PARTIAL. Slang's `fallback_strategy: base_locale`
+# means any key missing from this file falls back to the English copy
+# at runtime — so it's safe to ship a partial translation. Adding a
+# missing key here is a non-breaking improvement; please open a PR.
+#
+# Maintainers: keep the structure of this file aligned with
+# en.i18n.yaml. Slang validates that nested key paths resolve, but a
+# locale that names a missing parent (e.g. `welcome:` with no
+# `title:`) will surface as a runtime fallback instead of an error.
+
+welcome:
+  title: Bienvenido a Deckhand
+  action_start: Empezar
+  action_settings: Configuración
+  card_safety:
+    title: Seguridad
+
+pick_printer:
+  action_continue: Continuar
+  action_back: Atrás
+
+connect:
+  action_connect: Conectar
+  action_connecting: Conectando…
+  action_rescan: Volver a escanear
+
+verify:
+  action_continue: Se ve bien, continuar
+
+common:
+  action_continue: Continuar
+  action_back: Atrás

@@ -12,6 +12,7 @@ import 'screens/kiauh_screen.dart';
 import 'screens/screen_choice_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/files_screen.dart';
+import 'screens/snapshot_screen.dart';
 import 'screens/hardening_screen.dart';
 import 'screens/flash_target_screen.dart';
 import 'screens/choose_os_screen.dart';
@@ -71,6 +72,7 @@ GoRouter buildDeckhandRouter() => GoRouter(
     _fade('/screen-choice', () => const ScreenChoiceScreen()),
     _fade('/services', () => const ServicesScreen()),
     _fade('/files', () => const FilesScreen()),
+    _fade('/snapshot', () => const SnapshotScreen()),
     _fade('/hardening', () => const HardeningScreen()),
 
     // Flow B (fresh flash)
@@ -81,7 +83,7 @@ GoRouter buildDeckhandRouter() => GoRouter(
     // runs the whole fresh_flash pipeline (download, write, verify,
     // wait_for_ssh) via WizardController.startExecution. Redirect any
     // stale links.
-    GoRoute(path: '/flash-progress', redirect: (_, __) => '/progress'),
+    GoRoute(path: '/flash-progress', redirect: (_, _) => '/progress'),
     _fade('/first-boot', () => const FirstBootScreen()),
     _fade('/first-boot-setup', () => const FirstBootSetupScreen()),
 

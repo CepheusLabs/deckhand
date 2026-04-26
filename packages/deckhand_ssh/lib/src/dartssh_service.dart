@@ -290,6 +290,39 @@ class DartsshService implements SshService {
   }
 
   @override
+  Future<Map<String, int>> duPaths(
+    SshSession session,
+    List<String> paths,
+  ) async {
+    if (paths.isEmpty) return const {};
+    // One round-trip: emit `<size>\t<path>` per path. Missing paths
+    // collapse to size 0 via `du -s 2>/dev/null || echo 0\t<path>`
+    // so the output shape is uniform regardless of whether each
+    // path exists. The shell quote pattern matches every other
+    // SSH command in the codebase (shellSingleQuote in deckhand_core).
+    final lines = paths
+        .map((p) => "du -sb ${shellSingleQuote(p)} 2>/dev/null || "
+            "printf '0\\t%s\\n' ${shellSingleQuote(p)}")
+        .join(' ; ');
+    final result = await run(session, lines, timeout: const Duration(seconds: 30));
+    final sizes = <String, int>{};
+    for (final line in result.stdout.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final tabIdx = trimmed.indexOf('\t');
+      if (tabIdx < 0) continue;
+      final sizeStr = trimmed.substring(0, tabIdx);
+      final path = trimmed.substring(tabIdx + 1);
+      sizes[path] = int.tryParse(sizeStr) ?? 0;
+    }
+    // Backfill zeros for any path that didn't appear in output.
+    for (final p in paths) {
+      sizes.putIfAbsent(p, () => 0);
+    }
+    return sizes;
+  }
+
+  @override
   Future<void> disconnect(SshSession session) async {
     final client = _sessions.remove(session.id);
     client?.close();

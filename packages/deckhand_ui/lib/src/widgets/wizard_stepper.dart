@@ -120,21 +120,38 @@ class _StepDot extends StatelessWidget {
           ? FontWeight.w700
           : FontWeight.w500,
     );
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (state == _StepState.done)
-              Icon(Icons.check_circle, color: color, size: 14)
-            else
-              CircleAvatar(radius: 4, backgroundColor: color),
-            const SizedBox(width: 6),
-            Text(label, style: textStyle),
-          ],
+    // Screen-reader label tells the user where they are in the flow,
+    // not just "step dot". Without this, TalkBack / VoiceOver read
+    // nothing useful when users tab through the stepper.
+    final stateDescription = switch (state) {
+      _StepState.done => 'completed',
+      _StepState.current => 'current step',
+      _StepState.future => 'upcoming',
+    };
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      selected: state == _StepState.current,
+      label: '$label, $stateDescription',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (state == _StepState.done)
+                Icon(Icons.check_circle, color: color, size: 14)
+              else
+                CircleAvatar(radius: 4, backgroundColor: color),
+              const SizedBox(width: 6),
+              // ExcludeSemantics: the outer Semantics node already
+              // carries the full label. Without this, a screen
+              // reader would read the label twice.
+              ExcludeSemantics(child: Text(label, style: textStyle)),
+            ],
+          ),
         ),
       ),
     );

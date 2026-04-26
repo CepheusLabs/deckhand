@@ -5,15 +5,33 @@ import 'package:deckhand_core/deckhand_core.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
+import 'egress_interceptor.dart';
 import 'sidecar_client.dart';
 
 /// [UpstreamService] - git clones via the sidecar, release assets over
 /// HTTPS using Dio + GitHub's Releases API.
+///
+/// Every method that issues an outbound network call gates on the
+/// user's host allowlist via [requireHostApproved]. A
+/// [HostNotApprovedException] is the typed signal the UI uses to
+/// surface a "Allow this host?" prompt and retry.
+///
+/// Every Dio request is logged via [EgressLogInterceptor] so the
+/// S900 Network panel and debug bundles can subscribe to a single
+/// stream of approved outbound traffic. Callers can label requests
+/// via `Options(extra: {EgressLogInterceptor.operationLabelKey:
+/// 'Profile fetch'})` to associate the row in the UI with the
+/// triggering wizard step.
 class SidecarUpstreamService implements UpstreamService {
-  SidecarUpstreamService({required this.sidecar, Dio? dio})
-    : _dio = dio ?? Dio();
+  SidecarUpstreamService({
+    required this.sidecar,
+    required SecurityService security,
+    Dio? dio,
+  })  : _security = security,
+        _dio = (dio ?? Dio())..interceptors.add(EgressLogInterceptor(security));
 
-  final SidecarClient sidecar;
+  final SidecarConnection sidecar;
+  final SecurityService _security;
   final Dio _dio;
 
   @override
@@ -23,6 +41,7 @@ class SidecarUpstreamService implements UpstreamService {
     required String destPath,
     int depth = 1,
   }) async {
+    await requireHostApproved(_security, repoUrl);
     final res = await sidecar.call('profiles.fetch', {
       'repo_url': repoUrl,
       'ref': ref,
@@ -45,6 +64,7 @@ class SidecarUpstreamService implements UpstreamService {
         ? 'https://api.github.com/repos/$repoSlug/releases/latest'
         : 'https://api.github.com/repos/$repoSlug/releases/tags/$tag';
 
+    await requireHostApproved(_security, url);
     final relResp = await _dio.get<Map<String, dynamic>>(url);
     final rel = relResp.data ?? const {};
     final tagName = rel['tag_name'] as String? ?? tag ?? 'unknown';
@@ -77,12 +97,13 @@ class SidecarUpstreamService implements UpstreamService {
     required String url,
     required String destPath,
     String? expectedSha256,
-  }) {
-    return sidecar
+  }) async* {
+    await requireHostApproved(_security, url);
+    yield* sidecar
         .callStreaming('os.download', {
           'url': url,
           'dest': destPath,
-          if (expectedSha256 != null) 'sha256': expectedSha256,
+          'sha256': ?expectedSha256,
         })
         .transform(_osDownloadTransformer);
   }

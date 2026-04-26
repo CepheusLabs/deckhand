@@ -1,0 +1,47 @@
+# HITL scenario: Sovol Zero, fresh-flash flow, Linux rig.
+#
+# Walks the wizard through a clean OS flash + first-boot setup +
+# stack install. Assumes the rig has the eMMC mux (see
+# packaging/hitl/README.md) — without it the flash-target step
+# fails and the runner reports the failure with the correct
+# blast-radius signal.
+
+scenario_version: 1
+profile: sovol_zero
+flow: fresh_flash
+
+printer:
+  host: 192.0.2.40
+  ssh:
+    user: mks
+    password_env: PRINTER_PASS
+    # The printer's host key is regenerated on every fresh flash,
+    # so TOFU is the correct posture here. Other scenarios (stock-
+    # keep / snapshot-test) pin the key.
+    accept_host_key: true
+
+decisions:
+  os_image: armbian-bookworm
+  hostname: sovol-zero-hitl
+  user:
+    name: mks
+    password_env: PRINTER_PASS
+  webui: mainsail
+
+expectations:
+  step_status:
+    fresh_flash.os_download: completed
+    fresh_flash.flash_disk: completed
+    fresh_flash.wait_for_ssh: completed
+    fresh_flash.first_boot_setup: completed
+    fresh_flash.install_stack: completed
+  ports:
+    7125: open
+    80: open
+  remote_files:
+    - path: ~/klipper/klippy/klippy.py
+      must_exist: true
+    - path: ~/.deckhand/run-state.json
+      must_exist: true
+
+max_duration_minutes: 45

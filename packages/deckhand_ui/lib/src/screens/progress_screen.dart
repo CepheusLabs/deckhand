@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
+import '../widgets/network_panel.dart';
 import '../widgets/profile_text.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
@@ -410,7 +411,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (_, __, ___) => child,
+      pageBuilder: (_, _, _) => child,
       transitionBuilder: (context, anim, secondary, child) => FadeTransition(
         opacity: CurvedAnimation(
           parent: anim,
@@ -478,22 +479,46 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
             ],
             const SizedBox(height: 16),
           ],
-          Container(
-            height: 400,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Semantics(
-              label: t.progress.semantics_log_label,
-              child: ListView.builder(
-                itemCount: _log.length,
-                itemBuilder: (_, i) => Text(
-                  _log[i],
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          DefaultTabController(
+            length: 2,
+            child: Column(
+              children: [
+                const TabBar(
+                  tabs: [
+                    Tab(text: 'Log', icon: Icon(Icons.receipt_long_outlined)),
+                    Tab(text: 'Network', icon: Icon(Icons.cloud_outlined)),
+                  ],
                 ),
-              ),
+                Container(
+                  height: 360,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(8),
+                      bottomRight: Radius.circular(8),
+                    ),
+                  ),
+                  child: TabBarView(
+                    children: [
+                      Semantics(
+                        label: t.progress.semantics_log_label,
+                        child: ListView.builder(
+                          itemCount: _log.length,
+                          itemBuilder: (_, i) => Text(
+                            _log[i],
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const NetworkPanel(),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],

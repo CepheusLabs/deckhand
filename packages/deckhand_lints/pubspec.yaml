@@ -1,0 +1,10 @@
+name: deckhand_lints
+description: Shared Dart analyzer + lint rules for every package in the Deckhand monorepo.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter_lints: ^6.0.0

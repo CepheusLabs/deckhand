@@ -1,0 +1,180 @@
+name: Build macOS (self-hosted)
+
+# Lightweight macOS build that runs on the org's self-hosted runner.
+#
+# Why a separate workflow from `release.yml`:
+#   - `release.yml` runs on GitHub-hosted `macos-latest` so the
+#     org doesn't pay for runner uptime on every release.
+#   - This workflow exists for fast iteration: build the Flutter
+#     macOS binary on your physical Mac, no signing / notarization
+#     / DMG packaging, just the .app bundle for smoke-testing.
+#   - The full release.yml flow remains the canonical path for
+#     signed + notarized public releases.
+#
+# Trigger: workflow_dispatch only. Manual on-demand from the
+# Actions tab or via `gh workflow run build-macos.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch/tag/SHA to build"
+        required: false
+        default: main
+      version:
+        description: "DECKHAND_VERSION stamp (default: hitl-<sha>)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# One macOS build at a time on the runner. The label `[self-hosted,
+# macos]` matches the org-level runner; if you also gave it a more
+# specific label (e.g. `apple-silicon`) tighten this `runs-on` to
+# match. Leaving it broad lets any qualifying runner pick up the
+# job, which is what you want when you have a single shared mac.
+jobs:
+  build:
+    name: macOS bundle
+    runs-on: [self-hosted, macos]
+    timeout-minutes: 45
+    concurrency:
+      group: build-macos
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || 'main' }}
+
+      # Resolve the version stamp once. If the dispatcher passed
+      # an explicit `version`, use that; otherwise produce a
+      # short-sha label so the resulting binary is correlatable.
+      - name: Resolve version
+        id: v
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            v="${{ inputs.version }}"
+          else
+            v="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "::notice::Building macOS with DECKHAND_VERSION=$v"
+
+      # Self-hosted runners persist tooling between runs, so we
+      # don't reinstall Flutter — but we do verify the version
+      # the maintainer set up matches what release.yml uses, so a
+      # divergence between dev and release builds is loud.
+      - name: Verify Flutter SDK
+        shell: bash
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Verify Go SDK
+        shell: bash
+        run: |
+          go version
+
+      # Build the Go binaries first. CGO disabled for portability
+      # (matches release.yml). On Apple Silicon, GOARCH=arm64 is
+      # the native default; the runner picks its own arch so we
+      # don't pin one here.
+      - name: Build sidecar + helper
+        working-directory: sidecar
+        env:
+          CGO_ENABLED: "0"
+          STAMP: ${{ steps.v.outputs.version }}
+        shell: bash
+        run: |
+          mkdir -p dist
+          for cmd in deckhand-sidecar deckhand-elevated-helper; do
+            go build -trimpath \
+              -ldflags "-s -w -X main.Version=${STAMP}" \
+              -o "dist/${cmd}" \
+              "./cmd/${cmd}"
+          done
+          ls -la dist/
+          file dist/deckhand-sidecar dist/deckhand-elevated-helper
+
+      - name: Pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: Ensure macOS platform dir
+        working-directory: app
+        run: flutter create --platforms=macos --project-name=deckhand .
+
+      - name: Flutter build macOS
+        working-directory: app
+        env:
+          DH_VERSION: ${{ steps.v.outputs.version }}
+        shell: bash
+        run: |
+          flutter build macos \
+            --release \
+            --dart-define=DECKHAND_VERSION="$DH_VERSION"
+
+      # Drop the Go binaries inside the .app bundle so the produced
+      # artifact is a self-contained .app the user can run directly.
+      # Production releases use the codesigned DMG path in
+      # release.yml; this is a smoke artifact.
+      - name: Stage Go binaries inside .app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find app/build/macos/Build/Products/Release \
+                  -maxdepth 2 -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error ::no .app produced by flutter build"
+            exit 1
+          fi
+          cp sidecar/dist/deckhand-sidecar "$APP/Contents/MacOS/"
+          cp sidecar/dist/deckhand-elevated-helper "$APP/Contents/MacOS/"
+          chmod +x "$APP/Contents/MacOS/deckhand-sidecar"
+          chmod +x "$APP/Contents/MacOS/deckhand-elevated-helper"
+          ls -la "$APP/Contents/MacOS/"
+
+      - name: Sanity-check sidecar from inside the app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find app/build/macos/Build/Products/Release \
+                  -maxdepth 2 -name "*.app" -type d | head -1)
+          # Spawn the sidecar; ping; shutdown. If any of this fails
+          # the binary inside the bundle is broken — fail the run.
+          (
+            echo '{"jsonrpc":"2.0","id":"1","method":"ping","params":{}}'
+            sleep 1
+            echo '{"jsonrpc":"2.0","id":"2","method":"shutdown","params":{}}'
+          ) | "$APP/Contents/MacOS/deckhand-sidecar" 2>/dev/null \
+            | tee /tmp/sidecar.out
+          grep -q '"sidecar_version"' /tmp/sidecar.out
+
+      # Tar the .app into a single artifact. macOS .app is a
+      # bundle (directory tree); upload-artifact would otherwise
+      # zip it and damage extended attributes / executable bits.
+      # Tarballing first preserves them.
+      - name: Package .app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find app/build/macos/Build/Products/Release \
+                  -maxdepth 2 -name "*.app" -type d | head -1)
+          mkdir -p dist
+          tar --exclude=".DS_Store" \
+            -C "$(dirname "$APP")" \
+            -czf "dist/deckhand-macos-${{ steps.v.outputs.version }}.tar.gz" \
+            "$(basename "$APP")"
+          ls -la dist/
+          du -sh dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deckhand-macos-${{ steps.v.outputs.version }}
+          path: dist/*.tar.gz
+          retention-days: 30
+          if-no-files-found: error

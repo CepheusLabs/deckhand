@@ -1,5 +1,5 @@
 /// Tiny expression DSL evaluator for profile.yaml `when:` / `default_rules`
-/// blocks. Spec lives in deckhand-builds/AUTHORING.md.
+/// blocks. Spec lives in deckhand-profiles/AUTHORING.md.
 ///
 /// Grammar (recursive descent):
 ///   expr   := and ( 'OR' and )*
@@ -91,32 +91,40 @@ class DslException implements Exception {
 
 /// Default predicates shipped with Deckhand. Registered by the runtime
 /// before evaluating profile expressions.
+///
+/// Each predicate validates its arg shapes via [_argString]/[_argList]
+/// so a malformed expression in profile YAML surfaces as a typed
+/// [DslException] rather than a generic Dart cast failure. Catching
+/// the wrong type at the DSL boundary is the whole point — without
+/// it, a profile author's typo crashes the wizard isolate.
 Map<String, DslPredicate> defaultPredicates() => {
   'equals': (args, env) {
     _expect(args, 2, 'equals');
-    final v = env.getDecision(args[0] as String);
+    final v = env.getDecision(_argString(args, 0, 'equals'));
     return v == args[1];
   },
   'in_set': (args, env) {
     _expect(args, 2, 'in_set');
-    final v = env.getDecision(args[0] as String);
-    final list = (args[1] as List?) ?? const [];
+    final v = env.getDecision(_argString(args, 0, 'in_set'));
+    final list = _argList(args, 1, 'in_set');
     return list.contains(v);
   },
   'selected': (args, env) {
     _expect(args, 2, 'selected');
-    final stepId = args[0] as String;
-    final optionId = args[1] as String;
+    final stepId = _argString(args, 0, 'selected');
+    final optionId = _argString(args, 1, 'selected');
     final decision = env.getDecision(stepId);
     return decision == optionId;
   },
   'profile_field_equals': (args, env) {
     _expect(args, 2, 'profile_field_equals');
-    return env.getProfileField(args[0] as String) == args[1];
+    return env.getProfileField(_argString(args, 0, 'profile_field_equals')) ==
+        args[1];
   },
   'decision_made': (args, env) {
     _expect(args, 1, 'decision_made');
-    return env.decisions.containsKey(args[0] as String);
+    return env.decisions
+        .containsKey(_argString(args, 0, 'decision_made'));
   },
   'os_python_below': (args, env) {
     _expect(args, 1, 'os_python_below');
@@ -211,6 +219,27 @@ void _expect(List<Object?> args, int n, String name) {
   if (args.length != n) {
     throw DslException('$name expects $n args, got ${args.length}');
   }
+}
+
+String _argString(List<Object?> args, int i, String name) {
+  final v = args[i];
+  if (v is! String) {
+    throw DslException(
+      '$name: arg[$i] must be a string, got ${v.runtimeType} ($v)',
+    );
+  }
+  return v;
+}
+
+List<Object?> _argList(List<Object?> args, int i, String name) {
+  final v = args[i];
+  if (v == null) return const [];
+  if (v is! List) {
+    throw DslException(
+      '$name: arg[$i] must be a list, got ${v.runtimeType} ($v)',
+    );
+  }
+  return v;
 }
 
 // -----------------------------------------------------------------

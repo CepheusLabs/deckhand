@@ -15,14 +15,14 @@ void main() {
             'profile_version': '0.1.0',
             'display_name': 'Test',
             'status': 'alpha',
-            'os': {},
+            'os': <String, Object?>{},
             'ssh': {
               'default_credentials': [
                 {'user': 'root', 'password': 'root'},
               ],
             },
             'flows': {
-              'stock_keep': {'enabled': true, 'steps': []},
+              'stock_keep': {'enabled': true, 'steps': <Map<String, Object?>>[]},
             },
             'stock_os': {
               'files': [
@@ -89,7 +89,7 @@ void main() {
             ],
           },
           'flows': {
-            'stock_keep': {'enabled': true, 'steps': []},
+            'stock_keep': {'enabled': true, 'steps': <Map<String, Object?>>[]},
           },
           'stock_os': {
             'files': [

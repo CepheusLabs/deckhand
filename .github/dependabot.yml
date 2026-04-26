@@ -1,0 +1,95 @@
+version: 2
+updates:
+  # GitHub Actions — keep workflow action versions fresh.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Dependabot only applies labels that already exist on the repo.
+    # `.github/labels.yml` + the `labels.yml` workflow keep this set
+    # canonical; never reference a label here that isn't declared
+    # there or your PRs will arrive without the label.
+    labels: [dependencies, ci]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Go sidecar module.
+  - package-ecosystem: gomod
+    directory: /sidecar
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, sidecar]
+    # Pin go-git tightly (security-critical) — require manual review
+    # when it bumps across a minor.
+    ignore:
+      - dependency-name: github.com/go-git/go-git/v5
+        update-types: [version-update:semver-minor, version-update:semver-major]
+
+  # Dart / Flutter — one entry per pubspec. Dependabot treats every
+  # pubspec.yaml as a separate ecosystem manifest.
+  - package-ecosystem: pub
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter, app]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_core
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_profiles
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_ssh
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_flash
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter, security-sensitive]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_discovery
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_ui
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_profile_script
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter, security-sensitive]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_profile_lint
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter, security-sensitive]
+
+  - package-ecosystem: pub
+    directory: /packages/deckhand_lints
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    labels: [dependencies, flutter]

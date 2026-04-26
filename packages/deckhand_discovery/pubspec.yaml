@@ -16,3 +16,5 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  deckhand_lints:
+    path: ../deckhand_lints

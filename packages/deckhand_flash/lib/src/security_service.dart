@@ -14,6 +14,25 @@ class DefaultSecurityService implements SecurityService {
   final FlutterSecureStorage _storage;
   final _uuid = const Uuid();
   final _tokens = <String, ConfirmationToken>{};
+  final _egressController = StreamController<EgressEvent>.broadcast();
+
+  @override
+  Stream<EgressEvent> get egressEvents => _egressController.stream;
+
+  @override
+  void recordEgress(EgressEvent event) {
+    if (_egressController.isClosed) return;
+    _egressController.add(event);
+  }
+
+  /// Tear down the egress stream — production wiring keeps the
+  /// service alive for the session, but tests and shutdown paths
+  /// need a deterministic close to avoid pending-broadcast warnings.
+  Future<void> dispose() async {
+    if (!_egressController.isClosed) {
+      await _egressController.close();
+    }
+  }
 
   @override
   Future<ConfirmationToken> issueConfirmationToken({
@@ -56,10 +75,12 @@ class DefaultSecurityService implements SecurityService {
 
   /// Persistently allow-list [host]. Called by the UI after the user
   /// approves a network-egress prompt.
+  @override
   Future<void> approveHost(String host) async {
     await _storage.write(key: _hostAllowKey(host), value: '1');
   }
 
+  @override
   Future<void> revokeHost(String host) async {
     await _storage.delete(key: _hostAllowKey(host));
   }

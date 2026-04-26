@@ -1,12 +1,12 @@
 import '../models/printer_profile.dart';
 
-/// Fetch + parse printer profiles from the deckhand-builds repo.
+/// Fetch + parse printer profiles from the deckhand-profiles repo.
 abstract class ProfileService {
   /// Fetch the profile registry (tiny YAML at the repo root).
   Future<ProfileRegistry> fetchRegistry({bool force = false});
 
   /// Ensure a given profile tag is cached locally. Shallow-clones the
-  /// deckhand-builds repo at that tag if needed.
+  /// deckhand-profiles repo at that tag if needed.
   Future<ProfileCacheEntry> ensureCached({
     required String profileId,
     String? ref,

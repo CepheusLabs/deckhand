@@ -97,6 +97,7 @@ class _FlashTargetScreenState extends ConsumerState<FlashTargetScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/choose-path'),
+          isBack: true,
         ),
       ],
     );

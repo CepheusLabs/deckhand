@@ -3,7 +3,27 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:deckhand_core/deckhand_core.dart';
+import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
+
+/// Common surface adapters call into. Implemented by both the
+/// concrete [SidecarClient] (single connection) and
+/// [SidecarSupervisor] (auto-restart wrapper). Adapters take this
+/// type so they can be wired against either at the binding site
+/// without code change.
+abstract class SidecarConnection {
+  Future<Map<String, dynamic>> call(
+    String method,
+    Map<String, dynamic> params,
+  );
+  Stream<SidecarEvent> callStreaming(
+    String method,
+    Map<String, dynamic> params,
+  );
+  Stream<SidecarNotification> subscribeToOperation(String operationId);
+  Stream<SidecarNotification> get notifications;
+  Future<void> shutdown();
+}
 
 /// JSON-RPC 2.0 client that spawns the Go sidecar binary and talks to it
 /// over newline-delimited stdin/stdout.
@@ -13,7 +33,7 @@ import 'package:uuid/uuid.dart';
 ///   - notifications (sidecar -> UI) delivered via [notifications]
 ///   - per-operation notification streams via [subscribeToOperation]
 ///   - error responses surfaced as [SidecarError] exceptions
-class SidecarClient {
+class SidecarClient implements SidecarConnection {
   SidecarClient({required this.binaryPath, DeckhandLogger? logger})
     : _logger = logger;
 
@@ -36,6 +56,7 @@ class SidecarClient {
 
   /// All notifications from the sidecar. Each one carries an
   /// `operation_id` that correlates it to the request that spawned it.
+  @override
   Stream<SidecarNotification> get notifications =>
       _notificationsController.stream;
 
@@ -56,7 +77,7 @@ class SidecarClient {
         .transform(const LineSplitter())
         .listen(
           _handleLine,
-          onError: (e, st) {
+          onError: (Object e, StackTrace st) {
             _failAll(e.toString());
           },
           onDone: _onProcessDone,
@@ -86,7 +107,7 @@ class SidecarClient {
     await call('ping', const {}).timeout(
       const Duration(seconds: 5),
       onTimeout: () {
-        throw SidecarError(
+        throw const SidecarError(
           code: -1,
           message: 'Sidecar did not respond to ping within 5s',
         );
@@ -95,6 +116,7 @@ class SidecarClient {
   }
 
   /// Make a JSON-RPC call and await the response.
+  @override
   Future<Map<String, dynamic>> call(
     String method,
     Map<String, dynamic> params,
@@ -118,8 +140,14 @@ class SidecarClient {
 
   /// Subscribe to progress notifications for a specific operation. The
   /// returned stream closes when the matching request completes.
+  ///
+  /// The StreamController escapes into [_operationSubscribers] and is
+  /// closed by `callStreaming`'s completer callbacks (on success or
+  /// error) and by `shutdown()`. The analyzer's close_sinks check
+  /// can't trace that ownership chain.
+  @override
   Stream<SidecarNotification> subscribeToOperation(String operationId) {
-    final c = _operationSubscribers.putIfAbsent(
+    final c = _operationSubscribers.putIfAbsent( // ignore: close_sinks
       operationId,
       () => StreamController<SidecarNotification>.broadcast(),
     );
@@ -131,6 +159,7 @@ class SidecarClient {
   ///
   /// Returns a stream that emits notifications then completes with a
   /// single [SidecarResult] event (or errors with [SidecarError]).
+  @override
   Stream<SidecarEvent> callStreaming(
     String method,
     Map<String, dynamic> params,
@@ -164,7 +193,7 @@ class SidecarClient {
           opSub.close();
           _operationSubscribers.remove(id);
         })
-        .catchError((e, st) {
+        .catchError((Object e, StackTrace st) {
           controller.addError(e, st);
           controller.close();
           opSub.close();
@@ -173,15 +202,28 @@ class SidecarClient {
     return controller.stream;
   }
 
-  /// Cleanly shut the sidecar down.
+  /// Cleanly shut the sidecar down. Best-effort: if the graceful
+  /// `shutdown` RPC times out we kill the process; if `kill()` itself
+  /// fails (rare — process already gone, OS refused) the failure goes
+  /// to the attached logger so a misbehaving sidecar leaves a trail
+  /// instead of disappearing silently.
+  @override
   Future<void> shutdown() async {
     if (_process == null) return;
     try {
       await call('shutdown', const {}).timeout(const Duration(seconds: 2));
-    } catch (_) {
-      // ignore - we're shutting down anyway
+    } on TimeoutException catch (e) {
+      _logger?.warn('sidecar shutdown RPC timed out: $e');
+    } on SidecarError catch (e) {
+      _logger?.warn('sidecar shutdown RPC errored: $e');
+    } catch (e, st) {
+      _logger?.warn('sidecar shutdown RPC failed: $e\n$st');
     }
-    _process?.kill();
+    try {
+      _process?.kill();
+    } on Object catch (e, st) {
+      _logger?.warn('sidecar kill() failed: $e\n$st');
+    }
     await _stdoutSub?.cancel();
     await _notificationsController.close();
     for (final c in _operationSubscribers.values) {
@@ -193,6 +235,25 @@ class SidecarClient {
   }
 
   // -----------------------------------------------------------------
+
+  /// Feed a single newline-delimited JSON line into the client's
+  /// response router as if it had arrived from the sidecar's stdout.
+  /// Used by unit tests to exercise framing, correlation, and error
+  /// mapping without spawning a real process.
+  @visibleForTesting
+  void handleLineForTesting(String line) => _handleLine(line);
+
+  /// Register a completer for a request id so a test can correlate the
+  /// response it later feeds via [handleLineForTesting] without having
+  /// written to stdin. Returns the id the test should reference.
+  @visibleForTesting
+  String registerPendingForTesting(
+    String id,
+    Completer<Map<String, dynamic>> completer,
+  ) {
+    _pending[id] = completer;
+    return id;
+  }
 
   void _handleLine(String line) {
     if (line.trim().isEmpty) return;
@@ -226,10 +287,25 @@ class SidecarClient {
     if (completer == null) return;
 
     if (obj.containsKey('error')) {
-      final err = (obj['error'] as Map).cast<String, dynamic>();
+      // A compromised or buggy sidecar could send an error object
+      // without a `code`, or with one that isn't a number. Previously
+      // this crashed the app with an unhandled TypeError at the ^. Map
+      // malformed shapes to a synthetic -1 so the call still completes
+      // with a readable message instead of crashing the isolate.
+      final errRaw = obj['error'];
+      if (errRaw is! Map) {
+        completer.completeError(const SidecarError(
+          code: -1,
+          message: 'sidecar returned malformed error envelope',
+        ));
+        return;
+      }
+      final err = errRaw.cast<String, dynamic>();
+      final rawCode = err['code'];
+      final code = rawCode is num ? rawCode.toInt() : -1;
       completer.completeError(
         SidecarError(
-          code: (err['code'] as num).toInt(),
+          code: code,
           message: err['message'] as String? ?? '',
           data: err['data'],
         ),

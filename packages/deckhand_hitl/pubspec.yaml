@@ -1,0 +1,42 @@
+name: deckhand_hitl
+description: Headless wizard driver — runs Deckhand wizard scenarios end-to-end against a real printer for HITL CI.
+version: 0.2.0
+publish_to: none
+
+# Phase 2: this package now depends on the real Deckhand stack
+# (sidecar client, SSH service, wizard controller). It is therefore
+# a Flutter package, but the binary itself never instantiates a
+# Flutter widget — runApp is never called. The Flutter SDK is
+# required at build time for `dart compile exe`; the resulting
+# binary runs without any windowing system.
+#
+# Plugins that need WidgetsFlutterBinding are NOT used: the driver
+# substitutes a HeadlessSecurityService for DefaultSecurityService
+# (which uses flutter_secure_storage) and stubs DiscoveryService /
+# MoonrakerService where the wizard would normally call into
+# Bonsoir-backed mDNS or HTTP probes.
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  args: ^2.5.0
+  yaml: ^3.1.2
+  path: ^1.9.0
+  meta: ^1.15.0
+
+  deckhand_core:
+    path: ../deckhand_core
+  deckhand_flash:
+    path: ../deckhand_flash
+  deckhand_ssh:
+    path: ../deckhand_ssh
+  deckhand_profiles:
+    path: ../deckhand_profiles
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  deckhand_lints:
+    path: ../deckhand_lints

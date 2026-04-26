@@ -69,12 +69,78 @@ before pushing or for producing a dev-signed artifact.
 
 ## Running tests locally
 
+PowerShell (Windows + cross-platform PS 7+):
+
 ```powershell
-# Dart
-cd packages\deckhand_core
-D:\git\flutter\bin\flutter.bat test
+# Dart — run across the whole monorepo
+$packages = @(
+  'packages\deckhand_core',
+  'packages\deckhand_profile_script',
+  'packages\deckhand_profile_lint',
+  'packages\deckhand_profiles',
+  'packages\deckhand_ssh',
+  'packages\deckhand_flash',
+  'packages\deckhand_discovery',
+  'packages\deckhand_ui',
+  'app'
+)
+foreach ($p in $packages) {
+  Push-Location $p
+  flutter test
+  Pop-Location
+}
 
 # Go sidecar
-cd sidecar
-go test ./...
+Push-Location sidecar
+go test -race -count=1 ./...
+golangci-lint run ./...
+go run ./cmd/deckhand-ipc-docs       # regenerate IPC-METHODS.md
+Pop-Location
+
+# Profile lint against a local deckhand-profiles checkout
+Push-Location packages\deckhand_profile_lint
+dart run bin/deckhand_profile_lint.dart --root ..\..\..\deckhand-profiles --strict
+Pop-Location
 ```
+
+bash equivalent:
+
+```bash
+for p in packages/deckhand_core packages/deckhand_profile_script \
+         packages/deckhand_profile_lint packages/deckhand_profiles \
+         packages/deckhand_ssh packages/deckhand_flash \
+         packages/deckhand_discovery packages/deckhand_ui app; do
+  (cd "$p" && flutter test) || exit 1
+done
+(cd sidecar && go test -race -count=1 ./... && golangci-lint run ./...)
+(cd sidecar && go run ./cmd/deckhand-ipc-docs)
+(cd packages/deckhand_profile_lint && \
+   dart run bin/deckhand_profile_lint.dart --root ../../../deckhand-profiles --strict)
+```
+
+## Self-diagnostic
+
+`deckhand-sidecar doctor` runs a preflight over the user's machine
+(helper-binary presence, disk enumeration, elevation tool on PATH,
+writable data/cache dirs). Useful both in a bug report and during
+packaging work:
+
+```powershell
+cd sidecar
+go run ./cmd/deckhand-sidecar doctor
+```
+
+Exit 0 means healthy, 1 means at least one `[FAIL]` surfaced.
+
+## Dry-run mode
+
+Toggle `Settings → Dry-run` (or set `dry_run: true` in
+`settings.json`) to exercise the full wizard without touching any
+disk or running `sudo` on the printer. Every destructive step
+renders a simulated progress stream; the persistent banner at the
+top of every screen makes it impossible to forget dry-run is on.
+
+## Security-sensitive changes
+
+See [SECURITY.md](SECURITY.md) for the reviewer checklist when
+touching disk writes, profile fetch, elevation, or the IPC surface.

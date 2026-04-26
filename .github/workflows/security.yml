@@ -1,0 +1,175 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly re-scan against latest vuln databases — catches issues in
+    # otherwise-quiet dependencies.
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # SARIF upload to the Security tab
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------
+  # Secret scan. Runs the gitleaks CLI directly (MIT-licensed, no
+  # paywall) instead of the wrapper action — gitleaks-action v2
+  # requires a paid GITLEAKS_LICENSE for org-owned repos. The CLI
+  # has the same detection engine and produces SARIF for the
+  # Security tab.
+  # ---------------------------------------------------------------
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.21.2
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xzC /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan repository
+        run: |
+          gitleaks detect \
+            --no-banner \
+            --redact \
+            --report-format sarif \
+            --report-path gitleaks.sarif \
+            --exit-code 1
+
+      - name: Upload SARIF
+        # `gitleaks detect` doesn't produce SARIF if it failed before
+        # walking the tree (disk full, permission denied). Skip the
+        # SARIF upload step in that case rather than failing CI on a
+        # missing-file error.
+        if: always() && hashFiles('gitleaks.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+      - name: Upload raw report
+        if: failure() && hashFiles('gitleaks.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+          retention-days: 30
+
+  # ---------------------------------------------------------------
+  # Filesystem vulnerability scan. Picks up known-CVE versions of Go
+  # modules, Dart packages, and Docker base images. Uploads SARIF so
+  # Security tab surfaces findings per file + per severity.
+  # ---------------------------------------------------------------
+  trivy:
+    name: trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'  # don't fail the job — let Security tab route it
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      - name: Re-run and fail on CRITICAL
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  # ---------------------------------------------------------------
+  # Static analysis for Go. Catches unsafe-crypto usage,
+  # Command-injection patterns, etc. Runs alongside golangci-lint
+  # (which handles style + correctness).
+  # ---------------------------------------------------------------
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+          cache-dependency-path: sidecar/go.sum
+
+      - uses: securego/gosec@v2.21.4
+        with:
+          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
+        env:
+          GOFLAGS: -C=sidecar
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: sidecar/gosec-results.sarif
+          category: gosec
+
+  # ---------------------------------------------------------------
+  # Scheduled Go fuzz budget. Only runs on the nightly cron so PRs
+  # stay fast; the fuzz targets themselves live alongside the code
+  # and are exercised by normal `go test` on every PR.
+  # ---------------------------------------------------------------
+  fuzz:
+    name: Go fuzz (nightly)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+          cache-dependency-path: sidecar/go.sum
+
+      - name: Fuzz ValidateParams
+        working-directory: sidecar
+        run: go test -run '^$' -fuzz='^FuzzValidateParams$' -fuzztime=5m ./internal/rpc/
+
+      - name: Fuzz pattern cache
+        working-directory: sidecar
+        run: go test -run '^$' -fuzz='^FuzzValidateParams_PatternCaching$' -fuzztime=3m ./internal/rpc/
+
+      - name: Fuzz AssessWriteTarget
+        working-directory: sidecar
+        run: go test -run '^$' -fuzz='^FuzzAssessWriteTarget$' -fuzztime=5m ./internal/disks/
+
+      - name: Upload fuzz corpus on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: sidecar/**/testdata/fuzz/**
+          if-no-files-found: ignore
+          retention-days: 30

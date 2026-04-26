@@ -1,11 +1,12 @@
+import 'package:deckhand_core/deckhand_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../i18n/translations.g.dart';
 import '../providers.dart';
-import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
+import '../widgets/wizard_scaffold.dart';
 
 class ChooseOsScreen extends ConsumerStatefulWidget {
   const ChooseOsScreen({super.key});
@@ -19,12 +20,16 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final options =
+    final List<OsImageOption> options =
         ref.watch(wizardControllerProvider).profile?.os.freshInstallOptions ??
-        const [];
+        const <OsImageOption>[];
     if (_choice == null) {
-      _choice = options.where((o) => o.recommended).firstOrNull?.id ??
-          options.firstOrNull?.id;
+      OsImageOption? pick;
+      for (final OsImageOption o in options) {
+        if (o.recommended) { pick = o; break; }
+      }
+      pick ??= options.isEmpty ? null : options.first;
+      _choice = pick?.id;
     }
 
     return WizardScaffold(
@@ -85,12 +90,10 @@ class _ChooseOsScreenState extends ConsumerState<ChooseOsScreen> {
         WizardAction(
           label: t.common.action_back,
           onPressed: () => context.go('/flash-target'),
+          isBack: true,
         ),
       ],
     );
   }
 }
 
-extension on Iterable {
-  dynamic get firstOrNull => isEmpty ? null : first;
-}

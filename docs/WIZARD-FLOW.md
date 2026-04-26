@@ -96,7 +96,14 @@ the user resume an in-progress install.
 **Primary action.** "Start a new install" → S20-connect
 **Secondary actions.** "Resume" (if applicable), "Settings".
 
-**Adapter calls.** None.
+**Adapter calls.**
+
+- `DoctorService.run()` — the silent preflight check described in
+  [DOCTOR.md](DOCTOR.md). Result drives the small status strip at
+  the bottom of the screen. Failures are informational; the
+  primary action stays enabled because Deckhand is still useful
+  in degraded modes (the destructive flows gate on their specific
+  prerequisites independently).
 
 ---
 
@@ -390,6 +397,101 @@ Two buttons at the bottom: "Select all" / "Deselect all" for quick override.
 
 ---
 
+### S145-snapshot (stock config snapshot, Flow A only)
+
+**Purpose.** Capture the printer's hand-edited config files
+**before** the install rewrites them. Without this screen the
+single biggest reason users avoid Flow A is "I'll lose my
+printer.cfg tweaks." With it, users tick a few boxes and Deckhand
+preserves the work — silently or as a side-by-side diff after
+install.
+
+**Body.**
+
+- Heading: "Save your current configuration."
+- Helper text: "Before we install Klipper from upstream we'll
+  archive these directories from your printer. They'll be
+  restored side-by-side after install so you can copy any tweaks
+  you want to keep."
+- Per-path checkbox list driven by
+  `profile.stock_os.snapshot_paths[]`. Defaults to *all checked*
+  — opting **out** is the deliberate action because a missed
+  config file is a worse user experience than an unwanted backup.
+  Common entries:
+  - `~/printer_data/config/` — printer.cfg + macros.
+  - `~/printer_data/database/` — Moonraker history (small, often
+    skipped).
+  - `~/klippy_extras/` — third-party extras users dropped in by
+    hand.
+  - `~/.config/<vendor>/` — vendor-specific slicer presets when
+    the profile knows where to look.
+- Side panel: a live size estimate ("Selected paths: ~28 MB"),
+  recomputed when the user toggles boxes. The probe runs
+  `du -sk` over each path on the printer once and caches the
+  result for the screen.
+- Bottom: a single "Restore strategy" radio:
+  - **Side-by-side** (default) — archive is unpacked into
+    `~/printer_data.stock-2026-04-25/` after install; the user
+    decides what to merge.
+  - **Auto-merge non-conflicting files** — files that don't exist
+    in the new install are copied in directly; conflicting files
+    land in the side-by-side dir for manual review. Opt-in
+    because what counts as "conflict" depends on profile
+    knowledge.
+
+**Primary action.** "Snapshot and continue." Disabled until at
+least the size probe finishes, so users see a moment of "we're
+checking your printer" before the long-running tar.
+
+**Adapter calls.**
+
+- `SshService.duPaths(session, paths)` — populates the size
+  estimate.
+- `ArchiveService.captureRemote(session, paths, archivePath)` —
+  streams a `tar -czf -` over SSH into a host-local file under
+  `<data_dir>/state/snapshots/<profile>-<ts>.tar.gz`. The archive
+  hash is recorded in the session log.
+
+  Wire format note: `SshService.runStream` is line-oriented (UTF-8
+  decoded, split on `\n`). Raw binary tar bytes can't survive that
+  — they'd contain arbitrary 8-bit values. The implementation
+  wraps the stream in `tar | base64 | fold -w 76` on the printer
+  side, which yields a steady ~57-byte chunk per line and matches
+  the MIME / PEM convention. The host decodes each line back to
+  bytes. A future `ArchiveService` impl that uses a binary-safe
+  transport (raw exec channel, SFTP-only) can drop the wrapper.
+
+  Restore reverses the flow: the host uploads the archive via
+  SFTP to a `/tmp/deckhand-restore-<ts>.tar.gz` path on the
+  printer, runs `tar -xzf` against the uploaded file, then
+  removes the tmp. The previous design embedded the entire
+  base64 archive in a single shell command line — that exceeds
+  POSIX `ARG_MAX` (~128 KiB) for any real-world snapshot.
+
+**Notes.**
+
+- The archive lives in the host's data dir, not on the printer.
+  Users who reflash the printer from another machine can move
+  the archive over; Settings → Snapshots lists every captured
+  archive with its session id, printer hostname, and timestamp.
+- This screen never appears in Flow B (fresh flash): a clean
+  flash has nothing to preserve. Users who want a pre-flash
+  backup of the *whole disk* use the Manage view's Backup tab
+  ([WIZARD-FLOW.md](WIZARD-FLOW.md) — manage view).
+- If the SSH connection drops mid-archive the operation aborts
+  cleanly and the user sees a retry prompt; partial archives are
+  deleted by the host before retry to avoid confusing later
+  restores. The on-printer side uses `tar` with no temp file —
+  output streams directly to the SSH channel — so a kill
+  mid-stream doesn't leave junk on the printer.
+- The post-install side-by-side restore is part of the S900
+  step list as a `kind: snapshot_restore` step. Failure of the
+  restore is non-blocking (the install itself succeeded); the
+  archive stays on the host so the user can attempt restore
+  manually.
+
+---
+
 ### S150-hardening (optional security items)
 
 **Purpose.** Opt-in hardening suggestions.
@@ -606,7 +708,16 @@ confirmation checkbox).
 - Left: checklist of steps from `flows.<selected>.steps[]`. Current step
   highlighted with a spinner; completed steps get a green check; failed
   steps get a red X with a "retry" button.
-- Right: live log pane (streaming from adapter notifications).
+- Right: a tabbed pane with two views — **Log** (default, live log
+  stream) and **Network**. The Network tab subscribes to
+  `SecurityService.egressEvents` and renders one row per request:
+  host, operation label, status, bytes. Active requests show a
+  spinner; completed rows expand on click to reveal the full URL
+  and timestamps. The tab badge shows a count of in-flight
+  requests so the user can switch to it without watching the log
+  scroll past. Users uncomfortable with what they see can pause
+  the install (the "Pause after current step" button) and revoke
+  hosts in Settings.
 - Top: overall progress bar (derived from steps completed).
 
 Each step sends a notification when it starts, emits progress for
@@ -670,7 +781,7 @@ These can appear at any point:
   fingerprint" button.
 - **E-sidecar-missing** - "Helper binary missing; please reinstall Deckhand."
 - **E-disk-io** - During flash; surfaces the OS error + suggests retry.
-- **E-profile-fetch-failed** - "Can't fetch profile from deckhand-builds.
+- **E-profile-fetch-failed** - "Can't fetch profile from deckhand-profiles.
   Check internet or provide local path."
 - **E-unknown** - generic with "Save debug bundle" button.
 

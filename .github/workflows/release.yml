@@ -10,8 +10,8 @@ name: Release
 #                         ref, defaults to main)
 
 on:
-  # Release is manual-only for now. Flip push-on-main back on once the
-  # installer pipeline is green end-to-end.
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       ref:
@@ -153,15 +153,32 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: iscc /dVersion=$env:VERSION packaging\windows\deckhand.iss
 
-      - name: Code-sign (if cert present)
-        if: env.SIGNTOOL_CERT_THUMBPRINT != ''
+      - name: Code-sign (Authenticode)
+        if: ${{ secrets.WINDOWS_SIGN_THUMBPRINT != '' }}
         shell: pwsh
         env:
           SIGNTOOL_CERT_THUMBPRINT: ${{ secrets.WINDOWS_SIGN_THUMBPRINT }}
         run: |
-          Get-ChildItem packaging\windows\dist\*.exe | ForEach-Object {
-            & signtool sign /sha1 $env:SIGNTOOL_CERT_THUMBPRINT /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+          $signTargets = @(
+            (Get-ChildItem packaging\windows\dist\*.exe),
+            (Get-ChildItem sidecar\dist\*.exe)
+          ) | ForEach-Object { $_ }
+          foreach ($f in $signTargets) {
+            & signtool sign `
+              /sha1 $env:SIGNTOOL_CERT_THUMBPRINT `
+              /tr http://timestamp.digicert.com `
+              /td sha256 /fd sha256 $f.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed on $($f.FullName)" }
+            & signtool verify /pa /all $f.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool verify failed on $($f.FullName)" }
           }
+
+      - name: Warn when cert absent
+        if: ${{ secrets.WINDOWS_SIGN_THUMBPRINT == '' }}
+        shell: pwsh
+        run: |
+          Write-Warning "WINDOWS_SIGN_THUMBPRINT not set; shipping UNSIGNED installer."
+          Write-Warning "Unsigned installers will trigger SmartScreen warnings on end-user machines."
 
       - uses: actions/upload-artifact@v4
         with:
@@ -206,6 +223,25 @@ jobs:
           BUILD: ${{ needs.version.outputs.build }}
         run: flutter build macos --release --build-name="$VERSION" --build-number="$BUILD"
 
+      - name: Import signing certificate
+        if: ${{ secrets.MACOS_SIGN_CERT_P12 != '' }}
+        env:
+          MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
+          MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          echo "$MACOS_SIGN_CERT_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import /tmp/cert.p12 -k build.keychain \
+            -P "$MACOS_SIGN_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productsign
+          security list-keychains -d user -s build.keychain $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm -f /tmp/cert.p12
+
       - name: Build DMG
         env:
           MACOS_SIGN_ID: ${{ secrets.MACOS_SIGN_ID }}
@@ -214,8 +250,21 @@ jobs:
           MACOS_NOTARIZE_TEAM_ID: ${{ secrets.MACOS_NOTARIZE_TEAM_ID }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
+          if [ -z "${MACOS_SIGN_ID}" ]; then
+            echo "::warning ::MACOS_SIGN_ID not set; shipping UNSIGNED .app (Gatekeeper will block)."
+          fi
           chmod +x packaging/macos/build_dmg.sh
           ./packaging/macos/build_dmg.sh "$VERSION-${{ matrix.arch }}"
+
+      - name: Verify notarization
+        if: ${{ secrets.MACOS_SIGN_ID != '' }}
+        run: |
+          set -euo pipefail
+          for dmg in packaging/macos/dist/*.dmg; do
+            echo "Verifying $dmg"
+            spctl --assess --type open --context context:primary-signature -vv "$dmg"
+            xcrun stapler validate "$dmg"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
@@ -275,6 +324,22 @@ jobs:
           chmod +x packaging/linux/build_appimage.sh
           ./packaging/linux/build_appimage.sh "$VERSION"
 
+      - name: GPG-sign AppImage
+        if: ${{ secrets.GPG_SIGNING_KEY != '' }}
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_KEY_PASSPHRASE: ${{ secrets.GPG_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          echo "$GPG_SIGNING_KEY" | gpg --batch --import
+          for f in packaging/linux/dist/*.AppImage; do
+            echo "Signing $f"
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_SIGNING_KEY_PASSPHRASE" \
+              --detach-sign --armor \
+              --output "${f}.asc" "$f"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: deckhand-linux
@@ -297,6 +362,81 @@ jobs:
         with:
           path: release-artifacts
           merge-multiple: false
+
+      - name: Compute SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd release-artifacts
+          find . -type f \
+            ! -name 'SHA256SUMS*' \
+            ! -name '*.asc' \
+            ! -name '*.sig' \
+            ! -name 'sbom.*' \
+            -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Install syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sudo sh -s -- -b /usr/local/bin v1.18.1
+          syft version
+
+      - name: Generate SBOMs (SPDX + CycloneDX)
+        run: |
+          set -euo pipefail
+          # Single syft invocation per format keeps the SBOMs over an
+          # identical scan of the same dir tree. The previous
+          # anchore/sbom-action call ran the same scanner twice with
+          # subtly different defaults — same end result on disk, but
+          # half the run time and one fewer GHA dependency to vet.
+          syft scan dir:. \
+            --output spdx-json=release-artifacts/sbom.spdx.json \
+            --output cyclonedx-json=release-artifacts/sbom.cdx.json \
+            --quiet
+
+      - name: SLSA provenance digest
+        id: provenance
+        run: |
+          set -euo pipefail
+          # Hash every release artifact so the release body can carry
+          # a single line the user can pipe to `sha256sum -c` locally.
+          SUMS=$(cd release-artifacts && find . -type f \
+            ! -name 'SHA256SUMS*' ! -name '*.asc' \
+            -print0 | sort -z | xargs -0 sha256sum)
+          {
+            echo "digests<<EOF"
+            echo "$SUMS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sign SHA256SUMS
+        if: ${{ secrets.GPG_SIGNING_KEY != '' }}
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_KEY_PASSPHRASE: ${{ secrets.GPG_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          echo "$GPG_SIGNING_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_SIGNING_KEY_PASSPHRASE" \
+            --detach-sign --armor \
+            --output release-artifacts/SHA256SUMS.asc \
+            release-artifacts/SHA256SUMS
+
+      - name: Build release manifest.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          BUILD: ${{ needs.version.outputs.build }}
+          TAG: ${{ needs.version.outputs.tag }}
+          REF: ${{ needs.version.outputs.ref }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build_manifest.py \
+            --version "$VERSION" --build "$BUILD" \
+            --tag "$TAG" --ref "$REF" \
+            --artifacts-dir release-artifacts \
+            --output release-artifacts/manifest.json
+          cat release-artifacts/manifest.json
 
       - name: Create tag
         env:

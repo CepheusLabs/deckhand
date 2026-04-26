@@ -347,7 +347,7 @@ settings:
   section_profiles: Printer profiles
   profiles_local_dir_label: Local profiles directory
   profiles_local_dir_hint: |
-    Point Deckhand at a checked-out copy of deckhand-builds on this
+    Point Deckhand at a checked-out copy of deckhand-profiles on this
     machine instead of fetching main from GitHub. Useful for profile
     authoring. Leave empty to fetch from GitHub.
   profiles_local_dir_active: Using local dir

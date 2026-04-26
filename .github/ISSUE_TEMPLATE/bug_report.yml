@@ -1,0 +1,100 @@
+name: Bug report
+description: Deckhand did something unexpected, crashed, or produced a broken install.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. The more specific you can be about
+        which wizard screen you were on and what the printer was,
+        the faster we can reproduce. Logs live in
+        `<dataDir>/deckhand-sidecar.log` — attach the last ~200 lines
+        if you can.
+
+  - type: input
+    id: deckhand-version
+    attributes:
+      label: Deckhand version
+      description: >
+        Shown at the bottom of the Settings screen, or run
+        `deckhand-sidecar --version` if you have the binary on PATH.
+      placeholder: "26.4.24-1510"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Host OS
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS 14 (Sonoma)
+        - macOS 15 (Sequoia)
+        - Linux (specify distro below)
+    validations:
+      required: true
+
+  - type: input
+    id: printer
+    attributes:
+      label: Printer model + profile id
+      description: >
+        e.g. "Sovol Zero / sovol-zero" or "Phrozen Arco / phrozen-arco".
+        Profile id is the folder name in deckhand-profiles/printers/.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flow
+    attributes:
+      label: Wizard flow
+      options:
+        - Stock-keep (install on top of vendor OS)
+        - Fresh-flash (wipe + reinstall)
+        - Did not get far enough to pick
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: >
+        What you were doing, what you expected, what you got. If the
+        sidecar crashed, paste the tail of its log. If the UI hung,
+        say which screen (the URL on the wizard stepper is fine —
+        e.g. /s200-choose-os).
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: deckhand-sidecar doctor output
+      description: >
+        Run `deckhand-sidecar doctor` and paste the result here. This
+        surfaces most environment issues without dumping device
+        details.
+      render: text
+
+  - type: textarea
+    id: log-tail
+    attributes:
+      label: Sidecar log tail
+      description: >
+        Paste the last ~200 lines of
+        `<dataDir>/deckhand-sidecar.log`. Secrets are auto-redacted
+        by the logger, but please glance through before pasting.
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I've searched existing issues for a duplicate.
+          required: true
+        - label: This is NOT a security issue (those go to Security Advisories).
+          required: true

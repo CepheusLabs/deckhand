@@ -152,6 +152,9 @@ class _StubSsh implements SshService {
     String localPath,
   ) async => 0;
   @override
+  Future<Map<String, int>> duPaths(SshSession session, List<String> paths) async =>
+      {for (final p in paths) p: 0};
+  @override
   Future<void> disconnect(SshSession session) async {}
 }
 
@@ -258,6 +261,12 @@ class _StubSecurity implements SecurityService {
   @override
   Future<bool> isHostAllowed(String host) async => true;
   @override
+  Future<void> approveHost(String host) async {}
+
+  @override
+  Future<void> revokeHost(String host) async {}
+
+  @override
   Future<void> pinHostFingerprint({
     required String host,
     required String fingerprint,
@@ -267,4 +276,8 @@ class _StubSecurity implements SecurityService {
   @override
   Future<Map<String, bool>> requestHostApprovals(List<String> hosts) async =>
       {for (final h in hosts) h: true};
+  @override
+  Stream<EgressEvent> get egressEvents => const Stream.empty();
+  @override
+  void recordEgress(EgressEvent event) {}
 }

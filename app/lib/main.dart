@@ -6,13 +6,20 @@ import 'package:deckhand_flash/deckhand_flash.dart';
 import 'package:deckhand_profiles/deckhand_profiles.dart';
 import 'package:deckhand_ssh/deckhand_ssh.dart';
 import 'package:deckhand_ui/deckhand_ui.dart';
+import 'package:deckhand_ui/trust_keyring_asset.dart';
+
+import 'build_info.dart' as build_info;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:window_manager/window_manager.dart';
+
+import 'window_geometry_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
 
   // Per-user data directories.
   final appDataDir = await getApplicationSupportDirectory();
@@ -32,12 +39,89 @@ Future<void> main() async {
   // persist changes.
   final settings = await DeckhandSettings.load(paths.settingsFile);
 
-  // Sidecar binary ships alongside the Flutter executable.
-  final sidecar = SidecarClient(binaryPath: _resolveSidecarPath());
+  // Apply locale before the first build. `LocaleSettings.useDeviceLocale()`
+  // picks up the OS-reported locale; an explicit override from Settings
+  // wins. Slang's `fallback_strategy: base_locale` means a missing
+  // string in es/etc. falls back to en at runtime, so a partial
+  // translation is safe.
+  if (settings.preferredLocale != null) {
+    final code = settings.preferredLocale!;
+    final parsed = AppLocaleUtils.parse(code);
+    LocaleSettings.setLocale(parsed);
+  } else {
+    LocaleSettings.useDeviceLocale();
+  }
+
+  // Apply persisted window geometry before the first frame so the
+  // window doesn't "jump" from a default size to the saved size.
+  // Geometry is restored only on desktop (skipped on mobile, which
+  // ignores window-manager calls anyway).
+  await applyPersistedWindowGeometry(settings);
+
+  // Wizard-state persistence. Snapshots let the user reopen the app
+  // after a crash and land on the screen they were on, with every
+  // previous decision intact. Secrets are NEVER serialized (see
+  // WizardState.toJson); tokens and SSH passwords live only in RAM.
+  //
+  // Save errors land in <logsDir>/wizard_state_errors.log so a flaky
+  // disk surfaces somewhere instead of being swallowed. The same
+  // sink also receives window-geometry persistence failures.
+  final persistenceLog = File(p.join(paths.logsDir, 'persistence_errors.log'));
+  void persistenceErrorSink(Object e, StackTrace st) {
+    try {
+      persistenceLog.writeAsStringSync(
+        '${DateTime.now().toIso8601String()} $e\n$st\n',
+        mode: FileMode.append,
+      );
+    } on Object {
+      // The error sink itself failing means we can't durably log
+      // the original failure either; that's beyond our reach.
+    }
+  }
+
+  final wizardStore = WizardStateStore(
+    path: p.join(paths.stateDir, 'wizard_session.json'),
+    errorSink: persistenceErrorSink,
+  );
+
+  // Sidecar binary ships alongside the Flutter executable. A failed
+  // start is a hard failure — every service override below expects a
+  // live sidecar, and silently continuing with a dead one produced
+  // cryptic "operation_id timeout" errors halfway through the wizard.
+  // Mount a minimal error screen instead of runApp so the user sees
+  // *why* Deckhand can't proceed.
+  //
+  // The supervisor (rather than a raw SidecarClient) is what every
+  // adapter sees. It auto-respawns the sidecar on retrySafe-method
+  // crashes (one retry), surfaces typed errors for stateful methods,
+  // and latches after the destructive flash path's pre-flight, so a
+  // mid-call segfault doesn't leave the wizard wedged. See
+  // [docs/IPC.md#sidecar-lifecycle-and-crash-recovery].
+  final sidecar = SidecarSupervisor(
+    spawn: () => SidecarClient(binaryPath: _resolveSidecarPath()),
+  );
   try {
     await sidecar.start();
   } catch (e, st) {
-    debugPrint('Sidecar failed to start: $e\n$st');
+    // Write a crash record to disk so `deckhand-sidecar doctor` can
+    // be pointed at it after the fact.
+    try {
+      final crashFile = File(p.join(paths.logsDir, 'startup_crash.log'));
+      await crashFile.writeAsString(
+        '${DateTime.now().toIso8601String()} sidecar.start failed\n$e\n$st\n',
+        mode: FileMode.append,
+      );
+    } catch (_) {}
+    runApp(_FatalErrorApp(
+      title: 'Sidecar failed to start',
+      body:
+          'Deckhand could not launch its helper process. This is either '
+          'a missing binary next to the app executable, or a corrupted '
+          'install. Try reinstalling Deckhand. Details:\n\n$e',
+      sidecarPath: _resolveSidecarPath(),
+      logsDir: paths.logsDir,
+    ));
+    return;
   }
 
   // Env var still takes precedence over settings (developer override
@@ -52,30 +136,91 @@ Future<void> main() async {
   // would fall back to accept-all and MITM attacks would not be caught.
   final security = DefaultSecurityService();
 
+  // SSH + archive services share an underlying connection model.
+  // The archive service captures the user's S145 stock-config
+  // selection into a host-local tar.gz before the install rewrites
+  // the printer's config. See docs/WIZARD-FLOW.md (S145-snapshot).
+  final sshService = DartsshService(security: security);
+  final archiveService = DartsshArchiveService(ssh: sshService);
+  final snapshotsDir = p.join(paths.stateDir, 'snapshots');
+  await Directory(snapshotsDir).create(recursive: true);
+
+  // Bundled profile-trust keyring. See docs/PROFILE-TRUST.md for the
+  // rotation/bootstrap model. While the asset is still the dev
+  // placeholder we leave `requireSignedTag` off — turning it on with
+  // a placeholder would brick first launch. A non-placeholder
+  // keyring flips the flag on so unsigned/branch fetches are
+  // rejected.
+  final trustKeyring = await loadBundledTrustKeyring();
+  final requireSignedTag = !trustKeyring.isPlaceholder;
+  if (trustKeyring.isPlaceholder) {
+    persistenceErrorSink(
+      StateError(
+        'profile-trust keyring is the dev placeholder; signed-tag '
+        'verification is OFF. Production builds must replace '
+        'packages/deckhand_core/lib/src/trust/keyring.asc.',
+      ),
+      StackTrace.current,
+    );
+  }
+
+  // Flash-sentinel writer — the UI persists a sentinel to
+  // <data_dir>/state/flash-sentinels/ before launching the elevated
+  // helper, and clears it after observing event:done. Sidecar's
+  // disks.list joins these onto enumeration results so the UI can
+  // surface "interrupted flash" warnings after a crash or power loss.
+  final sentinelWriter = FlashSentinelWriter(
+    directory: p.join(paths.stateDir, 'flash-sentinels'),
+  );
+
   runApp(
     ProviderScope(
       overrides: [
         deckhandSettingsProvider.overrideWithValue(settings),
+        wizardStateStoreProvider.overrideWithValue(wizardStore),
         profileServiceProvider.overrideWithValue(
           SidecarProfileService(
             sidecar: sidecar,
             paths: paths,
+            security: security,
             localProfilesDir: localProfilesDir,
+            trustKeyring: trustKeyring,
+            requireSignedTag: requireSignedTag,
           ),
         ),
-        sshServiceProvider.overrideWithValue(DartsshService(security: security)),
-        flashServiceProvider.overrideWithValue(SidecarFlashService(sidecar)),
+        sshServiceProvider.overrideWithValue(sshService),
+        archiveServiceProvider.overrideWithValue(archiveService),
+        snapshotsDirProvider.overrideWithValue(snapshotsDir),
+        debugBundlesDirProvider.overrideWithValue(
+          p.join(paths.stateDir, 'debug-bundles'),
+        ),
+        deckhandVersionProvider.overrideWithValue(build_info.deckhandVersion),
+        flashServiceProvider.overrideWithValue(
+          SidecarFlashService(sidecar, dryRun: settings.dryRun),
+        ),
         discoveryServiceProvider.overrideWithValue(BonsoirDiscoveryService()),
         moonrakerServiceProvider.overrideWithValue(MoonrakerHttpService()),
         upstreamServiceProvider.overrideWithValue(
-          SidecarUpstreamService(sidecar: sidecar),
+          SidecarUpstreamService(sidecar: sidecar, security: security),
         ),
         securityServiceProvider.overrideWithValue(security),
+        doctorServiceProvider.overrideWithValue(
+          SidecarDoctorService(sidecar: sidecar),
+        ),
         elevatedHelperServiceProvider.overrideWithValue(
-          ProcessElevatedHelperService(helperPath: _resolveElevatedHelperPath()),
+          ProcessElevatedHelperService(
+            helperPath: _resolveElevatedHelperPath(),
+            sentinelWriter: sentinelWriter,
+          ),
         ),
       ],
-      child: const WizardShell(),
+      child: TranslationProvider(
+        child: WindowGeometryObserver(
+          settings: settings,
+          onError: persistenceErrorSink,
+          child: const WizardShell(),
+        ),
+      ),
     ),
   );
 }
@@ -92,4 +237,63 @@ String _resolveElevatedHelperPath() {
   return Platform.isWindows
       ? p.join(dir, 'deckhand-elevated-helper.exe')
       : p.join(dir, 'deckhand-elevated-helper');
+}
+
+/// Shown instead of the wizard when the sidecar refuses to start.
+/// Kept inside `main.dart` so it works without any of the service
+/// providers being wired up.
+class _FatalErrorApp extends StatelessWidget {
+  const _FatalErrorApp({
+    required this.title,
+    required this.body,
+    required this.sidecarPath,
+    required this.logsDir,
+  });
+
+  final String title;
+  final String body;
+  final String sidecarPath;
+  final String logsDir;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.error_outline, size: 32, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  SelectableText(body),
+                  const SizedBox(height: 24),
+                  Text('Sidecar expected at:',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  SelectableText(sidecarPath),
+                  const SizedBox(height: 12),
+                  Text('Startup log:',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  SelectableText(p.join(logsDir, 'startup_crash.log')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

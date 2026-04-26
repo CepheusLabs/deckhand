@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../widgets/preflight_strip.dart';
 import '../widgets/wizard_scaffold.dart';
 import '../widgets/deckhand_stepper.dart';
 
@@ -18,7 +19,7 @@ class WelcomeScreen extends ConsumerWidget {
           'walks you through replacing vendor firmware with Kalico or Klipper '
           'end-to-end, either in place on your existing OS or on a fresh '
           'install.',
-      body: Column(
+      body: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _HelpCard(
@@ -29,7 +30,7 @@ class WelcomeScreen extends ConsumerWidget {
                 'over SSH using known default credentials, then let you pick '
                 'what you want to replace and what you want to keep.',
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _HelpCard(
             icon: Icons.shield_outlined,
             title: 'Safety',
@@ -38,6 +39,8 @@ class WelcomeScreen extends ConsumerWidget {
                 'Deckhand can back up your entire eMMC to an image before any '
                 'firmware swap, so you always have a route back to stock.',
           ),
+          SizedBox(height: 16),
+          PreflightStrip(),
         ],
       ),
       primaryAction: WizardAction(

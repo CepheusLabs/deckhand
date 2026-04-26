@@ -336,7 +336,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
         onPressed: () => context.go('/choose-path'),
       ),
       secondaryActions: [
-        WizardAction(label: t.common.action_back, onPressed: () => context.go('/connect')),
+        WizardAction(label: t.common.action_back, onPressed: () => context.go('/connect'), isBack: true),
       ],
     );
   }
