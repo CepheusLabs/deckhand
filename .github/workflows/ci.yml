@@ -37,16 +37,6 @@ jobs:
     defaults:
       run:
         working-directory: sidecar
-        # Force bash on every OS so arg parsing (especially the
-        # `-coverprofile=...` form below) is consistent. Without
-        # this, Windows defaults to pwsh, which mangles native-
-        # command argument syntax containing `=` and `./...`.
-        # Self-hosted Windows runner: bash auto-resolves to Git
-        # Bash if it's on PATH first; otherwise this expects the
-        # runner setup to put `C:\Program Files\Git\bin` ahead of
-        # `C:\Windows\System32` (where the WSL `bash.exe` stub
-        # lives).
-        shell: bash
     steps:
       - uses: actions/checkout@v5
 
@@ -67,8 +57,41 @@ jobs:
       - name: go build
         run: go build ./...
 
-      - name: go test
+      # Cross-OS tricks for `go test`:
+      #
+      #  - On Windows we cannot rely on `shell: bash` — the runner
+      #    agent resolves it to the WSL bash stub at
+      #    `C:\WINDOWS\system32\bash.EXE`, which has no installed
+      #    distro. We use `shell: pwsh` instead and feed Go via the
+      #    `--%` stop-parsing token so PowerShell does not mangle
+      #    the `-coverprofile=...` form into `coverage` and `.out`.
+      #
+      #  - On macOS we drop `-race` because Go's race-runtime test
+      #    binaries can ship without an LC_UUID load command, and
+      #    macOS dyld then refuses to load them (`signal: abort
+      #    trap`). The race detector finds OS-agnostic data races,
+      #    so the Linux run is the canonical race-testing path —
+      #    the macOS run still validates that all packages
+      #    build and test on darwin.
+      #
+      #  - Linux is the canonical full run: race + coverage; the
+      #    coverage gate below consumes coverage.out from this step.
+      - name: go test (linux)
+        if: matrix.os == 'linux'
+        shell: bash
         run: go test -race -count=1 -coverprofile=coverage.out ./...
+
+      - name: go test (macos)
+        if: matrix.os == 'macos'
+        shell: bash
+        run: go test -count=1 ./...
+
+      - name: go test (windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          & go test --% -race -count=1 -coverprofile=coverage.out ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Coverage gate (overall + per-package)
         if: matrix.os == 'linux'
