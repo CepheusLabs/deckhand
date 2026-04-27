@@ -45,7 +45,7 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
       ref: ${{ steps.v.outputs.ref }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.ref }}
@@ -88,7 +88,7 @@ jobs:
           - { goos: darwin,  goarch: arm64, runner: '["self-hosted","macos"]',   ext: ""     }
           - { goos: linux,   goarch: amd64, runner: '["self-hosted","linux"]',   ext: ""     }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.version.outputs.ref }}
 
@@ -114,7 +114,7 @@ jobs:
               "./cmd/${cmd}"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: go-${{ matrix.goos }}-${{ matrix.goarch }}
           path: sidecar/dist/*
@@ -127,7 +127,7 @@ jobs:
     needs: [version, go-binaries]
     runs-on: [self-hosted, windows]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { ref: "${{ needs.version.outputs.ref }}" }
 
       - uses: subosito/flutter-action@v2
@@ -137,7 +137,7 @@ jobs:
           cache: true
 
       - name: Download Go binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: go-windows-amd64
           path: sidecar/dist
@@ -194,7 +194,7 @@ jobs:
           Write-Warning "WINDOWS_SIGN_THUMBPRINT not set; shipping UNSIGNED installer."
           Write-Warning "Unsigned installers will trigger SmartScreen warnings on end-user machines."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deckhand-windows
           path: packaging/windows/dist/*
@@ -207,7 +207,7 @@ jobs:
       matrix:
         arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { ref: "${{ needs.version.outputs.ref }}" }
 
       - uses: subosito/flutter-action@v2
@@ -217,7 +217,7 @@ jobs:
           cache: true
 
       - name: Download Go binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: go-darwin-${{ matrix.arch }}
           path: sidecar/dist
@@ -280,7 +280,7 @@ jobs:
             xcrun stapler validate "$dmg"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deckhand-macos-${{ matrix.arch }}
           path: packaging/macos/dist/*
@@ -290,7 +290,7 @@ jobs:
     needs: [version, go-binaries]
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { ref: "${{ needs.version.outputs.ref }}" }
 
       - uses: subosito/flutter-action@v2
@@ -300,7 +300,7 @@ jobs:
           cache: true
 
       - name: Download Go binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: go-linux-amd64
           path: sidecar/dist
@@ -354,7 +354,7 @@ jobs:
               --output "${f}.asc" "$f"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deckhand-linux
           path: packaging/linux/dist/*
@@ -367,12 +367,12 @@ jobs:
     needs: [version, windows, macos, linux]
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ needs.version.outputs.ref }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: release-artifacts
           merge-multiple: false
@@ -466,7 +466,7 @@ jobs:
             git push origin "$TAG"
           fi
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.version.outputs.tag }}
           name: Deckhand ${{ needs.version.outputs.version }}+${{ needs.version.outputs.build }}

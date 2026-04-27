@@ -85,7 +85,7 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Resolve scenario file
         id: resolve
@@ -179,7 +179,7 @@ jobs:
       # quietly turning into 28 min between releases).
       - name: Upload artifacts
         if: always() && steps.resolve.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hitl-${{ matrix.rig }}-${{ matrix.flow }}
           path: hitl-artifacts/
@@ -197,7 +197,7 @@ jobs:
     if: failure() && github.event_name == 'schedule'
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Open or update tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

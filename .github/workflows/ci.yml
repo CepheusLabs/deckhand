@@ -38,7 +38,7 @@ jobs:
       run:
         working-directory: sidecar
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # Toolchain is pre-installed on every self-hosted runner the
       # org operates. Verify visibility instead of installing on
@@ -133,7 +133,7 @@ jobs:
               || { echo "::error::$pkg coverage ${actual}% below ${floor}% floor"; exit 1; }
           done
 
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v9
         if: matrix.os == 'linux'
         with:
           version: v2.1.6
@@ -173,7 +173,7 @@ jobs:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -249,7 +249,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ github.run_id }}-${{ strategy.job-index }}
           path: ${{ matrix.package }}/coverage/lcov.info
@@ -265,9 +265,9 @@ jobs:
     name: Python scripts
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -278,7 +278,7 @@ jobs:
     name: Profile YAML lint
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
